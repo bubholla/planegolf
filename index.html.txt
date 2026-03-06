@@ -1,0 +1,630 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PLANEGOLF Prototype</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #87b8ff;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+
+    #ui {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 10;
+      color: white;
+      background: rgba(0, 0, 0, 0.35);
+      padding: 12px 14px;
+      border-radius: 12px;
+      min-width: 180px;
+      user-select: none;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.2);
+    }
+
+
+    #ui h1 {
+      margin: 0 0 10px 0;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+
+    #strokeText, #statusText, #powerText {
+      font-size: 14px;
+      margin: 6px 0;
+    }
+
+
+    #resetBtn {
+      margin-top: 10px;
+      width: 100%;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 12px;
+      cursor: pointer;
+      background: #ffffff;
+      color: #1d3b24;
+      font-weight: 700;
+    }
+
+
+    #resetBtn:hover {
+      background: #e9f5ea;
+    }
+
+
+    #reticle {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 10px;
+      height: 10px;
+      transform: translate(-50%, -50%);
+      border: 2px solid rgba(255,255,255,0.85);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+
+    #powerBarWrap {
+      position: absolute;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%);
+      width: 280px;
+      height: 16px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.25);
+      overflow: hidden;
+      z-index: 10;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.2);
+    }
+
+
+    #powerBar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #87ff9f, #ffe96b, #ff8a6b);
+      transition: width 0.04s linear;
+    }
+
+
+    #hint {
+      position: absolute;
+      right: 16px;
+      top: 16px;
+      z-index: 10;
+      color: white;
+      background: rgba(0, 0, 0, 0.28);
+      padding: 12px 14px;
+      border-radius: 12px;
+      max-width: 280px;
+      font-size: 13px;
+      line-height: 1.4;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="ui">
+      <h1>PLANEGOLF</h1>
+      <div id="strokeText">Strokes: 0</div>
+      <div id="powerText">Power: 0%</div>
+      <div id="statusText">Status: Aim your throw</div>
+      <button id="resetBtn">Reset hole</button>
+    </div>
+    <div id="hint">
+      Mouse move = aim<br>
+      Click + drag = set power<br>
+      Release = throw paper airplane
+    </div>
+    <div id="reticle"></div>
+    <div id="powerBarWrap"><div id="powerBar"></div></div>
+  </div>
+
+
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+
+    const app = document.getElementById('app');
+    const strokeText = document.getElementById('strokeText');
+    const powerText = document.getElementById('powerText');
+    const statusText = document.getElementById('statusText');
+    const powerBar = document.getElementById('powerBar');
+    const resetBtn = document.getElementById('resetBtn');
+
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87b8ff);
+    scene.fog = new THREE.Fog(0x87b8ff, 60, 180);
+
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    app.appendChild(renderer.domElement);
+
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 500);
+    camera.position.set(0, 8, 18);
+
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+    scene.add(ambientLight);
+
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.6);
+    directionalLight.position.set(18, 24, 10);
+    scene.add(directionalLight);
+
+
+    const clock = new THREE.Clock();
+
+
+    // ------------------------------------------------------------
+    // COURSE SETUP
+    // ------------------------------------------------------------
+    // Later: add multiple holes by replacing this single tee / basket
+    // setup with an array of hole definitions and loading the active one.
+    const teePosition = new THREE.Vector3(0, 0.18, 0);
+    const basketPosition = new THREE.Vector3(0, 2.2, -38);
+    const basketRadius = 0.42; // slightly larger than a basketball
+    const groundY = 0;
+
+
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(200, 200),
+      new THREE.MeshStandardMaterial({ color: 0x49a35b })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+
+    const teeMarker = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.55, 0.55, 0.08, 24),
+      new THREE.MeshStandardMaterial({ color: 0xf4f4f4 })
+    );
+    teeMarker.position.set(teePosition.x, 0.04, teePosition.z);
+    scene.add(teeMarker);
+
+
+    const basket = new THREE.Mesh(
+      new THREE.SphereGeometry(basketRadius, 24, 24),
+      new THREE.MeshStandardMaterial({ color: 0xff8f3f, metalness: 0.05, roughness: 0.8 })
+    );
+    basket.position.copy(basketPosition);
+    scene.add(basket);
+
+
+    const basketPole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.05, 0.05, basketPosition.y, 16),
+      new THREE.MeshStandardMaterial({ color: 0x666666 })
+    );
+    basketPole.position.set(basketPosition.x, basketPosition.y / 2, basketPosition.z);
+    scene.add(basketPole);
+
+
+    const basketRing = new THREE.Mesh(
+      new THREE.TorusGeometry(0.65, 0.05, 12, 32),
+      new THREE.MeshStandardMaterial({ color: 0xffffff })
+    );
+    basketRing.rotation.x = Math.PI / 2;
+    basketRing.position.set(basketPosition.x, basketPosition.y, basketPosition.z);
+    scene.add(basketRing);
+
+
+    const guideLineMaterial = new THREE.LineDashedMaterial({
+      color: 0xffffff,
+      dashSize: 0.45,
+      gapSize: 0.25,
+      transparent: true,
+      opacity: 0.55
+    });
+
+
+    const guidePoints = [new THREE.Vector3(), new THREE.Vector3()];
+    const guideLineGeometry = new THREE.BufferGeometry().setFromPoints(guidePoints);
+    const aimGuide = new THREE.Line(guideLineGeometry, guideLineMaterial);
+    aimGuide.computeLineDistances();
+    scene.add(aimGuide);
+
+
+    // ------------------------------------------------------------
+    // BASIC PAPER AIRPLANE MESH
+    // ------------------------------------------------------------
+    // Later: different plane types can swap this mesh and change physics
+    // values like lift, drag, throw multiplier, and stability.
+    function createPaperAirplane() {
+      const planeGroup = new THREE.Group();
+
+
+      const bodyMat = new THREE.MeshStandardMaterial({
+        color: 0xf8f8f2,
+        roughness: 0.95,
+        metalness: 0.0,
+        side: THREE.DoubleSide
+      });
+
+
+      const wingGeo = new THREE.BufferGeometry();
+      const wingVertices = new Float32Array([
+        0, 0, 1.2,
+        -1.0, 0, -0.8,
+        0, 0.06, -0.35,
+
+
+        0, 0, 1.2,
+        1.0, 0, -0.8,
+        0, 0.06, -0.35,
+      ]);
+      wingGeo.setAttribute('position', new THREE.BufferAttribute(wingVertices, 3));
+      wingGeo.computeVertexNormals();
+      const wings = new THREE.Mesh(wingGeo, bodyMat);
+      planeGroup.add(wings);
+
+
+      const centerFold = new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 0.08, 1.4),
+        bodyMat
+      );
+      centerFold.position.set(0, 0.03, 0.1);
+      planeGroup.add(centerFold);
+
+
+      const tail = new THREE.Mesh(
+        new THREE.BoxGeometry(0.06, 0.38, 0.18),
+        bodyMat
+      );
+      tail.position.set(0, 0.18, -0.6);
+      planeGroup.add(tail);
+
+
+      planeGroup.scale.setScalar(0.45);
+      return planeGroup;
+    }
+
+
+    const airplane = createPaperAirplane();
+    scene.add(airplane);
+
+
+    // ------------------------------------------------------------
+    // GAME STATE
+    // ------------------------------------------------------------
+    let strokes = 0;
+    let holeComplete = false;
+    let isDragging = false;
+    let isThrown = false;
+    let dragStartY = 0;
+    let currentPower = 0;
+    let cameraMode = 'orbit'; // orbit | flight
+
+
+    // Aim angles in radians
+    let aimYaw = 0;
+    let aimPitch = 0.1;
+
+
+    const minPitch = -0.18;
+    const maxPitch = 0.75;
+    const maxPower = 28;
+
+
+    const velocity = new THREE.Vector3();
+    const tempForward = new THREE.Vector3();
+    const tempUp = new THREE.Vector3();
+
+
+    const planePhysics = {
+      gravity: 9.8,
+      drag: 0.18,
+      lift: 6.2,
+      glideAssist: 1.3,
+      bounce: 0.25,
+      groundFriction: 0.88,
+    };
+
+
+    function resetPlane() {
+      airplane.position.copy(teePosition);
+      airplane.rotation.set(0, 0, 0);
+      airplane.rotation.order = 'YXZ';
+      airplane.rotation.y = aimYaw;
+      airplane.rotation.x = -aimPitch;
+      velocity.set(0, 0, 0);
+      isThrown = false;
+      currentPower = 0;
+      powerBar.style.width = '0%';
+      powerText.textContent = 'Power: 0%';
+      cameraMode = 'orbit';
+      updateAimGuide();
+      statusText.textContent = holeComplete ? 'Status: Hole complete' : 'Status: Aim your throw';
+    }
+
+
+    function resetHole() {
+      strokes = 0;
+      holeComplete = false;
+      aimYaw = 0;
+      aimPitch = 0.1;
+      strokeText.textContent = 'Strokes: 0';
+      resetPlane();
+    }
+
+
+    function updateAimGuide() {
+      const origin = teePosition.clone();
+      const dir = getAimDirection();
+      guidePoints[0].copy(origin);
+      guidePoints[1].copy(origin.clone().add(dir.multiplyScalar(8)));
+      aimGuide.geometry.setFromPoints(guidePoints);
+      aimGuide.computeLineDistances();
+      aimGuide.visible = !isThrown && !holeComplete;
+    }
+
+
+    function getAimDirection() {
+      const dir = new THREE.Vector3(0, 0, -1);
+      const euler = new THREE.Euler(-aimPitch, aimYaw, 0, 'YXZ');
+      dir.applyEuler(euler).normalize();
+      return dir;
+    }
+
+
+    function throwPlane() {
+      if (isThrown || holeComplete) return;
+
+
+      const dir = getAimDirection();
+      const powerRatio = currentPower / maxPower;
+      const launchSpeed = 8 + currentPower;
+      velocity.copy(dir.multiplyScalar(launchSpeed));
+      velocity.y += 0.6 + powerRatio * 1.8;
+
+
+      isThrown = true;
+      cameraMode = 'flight';
+      strokes += 1;
+      strokeText.textContent = `Strokes: ${strokes}`;
+      statusText.textContent = 'Status: Plane in flight';
+      aimGuide.visible = false;
+    }
+
+
+    function updatePlanePhysics(dt) {
+      if (!isThrown || holeComplete) return;
+
+
+      airplane.getWorldDirection(tempForward);
+      tempForward.normalize();
+
+
+      // Gravity
+      velocity.y -= planePhysics.gravity * dt;
+
+
+      // Simple lift: stronger when moving forward and not diving straight down.
+      const speed = velocity.length();
+      const horizontalSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+      const glideFactor = THREE.MathUtils.clamp(horizontalSpeed / 12, 0, 1.5);
+      const noseUpFactor = THREE.MathUtils.clamp((tempForward.y + 0.35), 0, 1.2);
+      velocity.y += planePhysics.lift * glideFactor * noseUpFactor * dt;
+
+
+      // Small forward assist to keep it feeling like a gliding paper plane.
+      velocity.add(tempForward.clone().multiplyScalar(planePhysics.glideAssist * dt));
+
+
+      // Drag
+      const dragMultiplier = Math.max(0, 1 - planePhysics.drag * dt);
+      velocity.multiplyScalar(dragMultiplier);
+
+
+      // Move airplane
+      airplane.position.addScaledVector(velocity, dt);
+
+
+      // Orient the plane to roughly face its velocity direction.
+      if (speed > 0.001) {
+        const velDir = velocity.clone().normalize();
+        const yaw = Math.atan2(velDir.x, velDir.z);
+        const pitch = -Math.asin(THREE.MathUtils.clamp(velDir.y, -1, 1));
+        airplane.rotation.y = yaw + Math.PI;
+        airplane.rotation.x = pitch * 0.8;
+        airplane.rotation.z = THREE.MathUtils.clamp(-velocity.x * 0.03, -0.35, 0.35);
+      }
+
+
+      // Ground collision / skid / stop
+      if (airplane.position.y <= teePosition.y) {
+        airplane.position.y = teePosition.y;
+
+
+        if (Math.abs(velocity.y) > 1.2) {
+          velocity.y = -velocity.y * planePhysics.bounce;
+        } else {
+          velocity.y = 0;
+        }
+
+
+        velocity.x *= planePhysics.groundFriction;
+        velocity.z *= planePhysics.groundFriction;
+
+
+        if (velocity.length() < 0.9) {
+          velocity.set(0, 0, 0);
+          isThrown = false;
+          cameraMode = 'orbit';
+          statusText.textContent = holeComplete ? 'Status: Hole complete' : 'Status: Throw again';
+          updateAimGuide();
+        }
+      }
+
+
+      // Basket collision: sphere check around airplane nose position.
+      const noseOffset = new THREE.Vector3(0, 0, 0.45).applyEuler(airplane.rotation);
+      const planeCheckPoint = airplane.position.clone().add(noseOffset);
+      const distToBasket = planeCheckPoint.distanceTo(basket.position);
+      if (distToBasket <= basketRadius + 0.18) {
+        holeComplete = true;
+        isThrown = false;
+        velocity.set(0, 0, 0);
+        statusText.textContent = `Status: Hole complete in ${strokes} stroke${strokes === 1 ? '' : 's'}`;
+        cameraMode = 'orbit';
+      }
+
+
+      // Out of bounds safeguard
+      if (airplane.position.length() > 240 || airplane.position.y < -40) {
+        statusText.textContent = 'Status: Out of bounds — reset hole';
+        isThrown = false;
+        velocity.set(0, 0, 0);
+        cameraMode = 'orbit';
+      }
+    }
+
+
+    function updateCamera(dt) {
+      if (cameraMode === 'orbit') {
+        // Orbit around the tee before each throw.
+        const orbitRadius = 13;
+        const orbitHeight = 5.5;
+        const orbitAngle = aimYaw + Math.PI + 0.45;
+        const targetPos = new THREE.Vector3(
+          teePosition.x + Math.sin(orbitAngle) * orbitRadius,
+          teePosition.y + orbitHeight + aimPitch * 3.0,
+          teePosition.z + Math.cos(orbitAngle) * orbitRadius,
+        );
+        camera.position.lerp(targetPos, 1 - Math.pow(0.0008, dt));
+        const lookTarget = teePosition.clone().add(getAimDirection().multiplyScalar(8));
+        camera.lookAt(lookTarget);
+      } else {
+        // Follow behind the plane during flight.
+        const forward = velocity.lengthSq() > 0.01 ? velocity.clone().normalize() : getAimDirection();
+        const desiredPos = airplane.position.clone()
+          .add(forward.clone().multiplyScalar(6.0))
+          .add(new THREE.Vector3(0, 2.6, 0));
+        const behindPos = airplane.position.clone()
+          .sub(forward.clone().multiplyScalar(7.2))
+          .add(new THREE.Vector3(0, 3.0, 0));
+
+
+        // Blend slightly between behind and side/above so the plane stays visible.
+        const mixed = behindPos.lerp(desiredPos, 0.18);
+        camera.position.lerp(mixed, 1 - Math.pow(0.0005, dt));
+        camera.lookAt(airplane.position.clone().add(forward.clone().multiplyScalar(4)));
+      }
+    }
+
+
+    function updatePowerUi() {
+      const pct = Math.round((currentPower / maxPower) * 100);
+      powerText.textContent = `Power: ${pct}%`;
+      powerBar.style.width = `${pct}%`;
+    }
+
+
+    function pointerMove(event) {
+      if (holeComplete) return;
+
+
+      if (isDragging && !isThrown) {
+        const deltaY = dragStartY - event.clientY;
+        currentPower = THREE.MathUtils.clamp(deltaY * 0.08, 0, maxPower);
+        updatePowerUi();
+        return;
+      }
+
+
+      if (!isThrown) {
+        const nx = (event.clientX / window.innerWidth) * 2 - 1;
+        const ny = (event.clientY / window.innerHeight) * 2 - 1;
+        aimYaw = THREE.MathUtils.clamp(nx * 1.3, -1.35, 1.35);
+        aimPitch = THREE.MathUtils.clamp(-ny * 0.75 + 0.12, minPitch, maxPitch);
+        airplane.rotation.y = aimYaw;
+        airplane.rotation.x = -aimPitch;
+        updateAimGuide();
+      }
+    }
+
+
+    function pointerDown(event) {
+      if (event.button !== 0 || isThrown || holeComplete) return;
+      isDragging = true;
+      dragStartY = event.clientY;
+      currentPower = 0;
+      updatePowerUi();
+      statusText.textContent = 'Status: Drag to set power';
+    }
+
+
+    function pointerUp() {
+      if (!isDragging) return;
+      isDragging = false;
+      if (currentPower > 0.2) {
+        throwPlane();
+      } else {
+        statusText.textContent = 'Status: Aim your throw';
+      }
+      updatePowerUi();
+    }
+
+
+    renderer.domElement.addEventListener('pointermove', pointerMove);
+    renderer.domElement.addEventListener('pointerdown', pointerDown);
+    window.addEventListener('pointerup', pointerUp);
+    resetBtn.addEventListener('click', resetHole);
+
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+
+    // ------------------------------------------------------------
+    // EXTENSION HOOKS
+    // ------------------------------------------------------------
+    // Wind: add a wind vector in updatePlanePhysics and apply it to velocity.
+    // AI players: create a turn system and feed aim/power values from agents.
+    // Multiple holes: store tee/basket/terrain data in a hole array and load by index.
+    // Different plane types: define different mesh + stats presets.
+
+
+    resetHole();
+
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.033);
+      updatePlanePhysics(dt);
+      updateCamera(dt);
+      renderer.render(scene, camera);
+    }
+
+
+    animate();
+  </script>
+</body>
+</html>
