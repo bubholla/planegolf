@@ -1,0 +1,3738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PLANEGOLF</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{background:#0c1c0c;overflow:hidden;font-family:'Courier New',Courier,monospace;cursor:crosshair;user-select:none;}
+canvas{display:block;position:fixed;inset:0;}
+
+/* ── Stroke / hole card (top-left) ─── */
+#holecard{
+  position:fixed;top:20px;left:20px;background:rgba(10,30,160,.65);
+  border:1px solid rgba(80,130,255,.45);border-radius:4px;
+  padding:14px 18px;color:#ffffff;min-width:148px;
+  backdrop-filter:blur(8px);z-index:10;display:none;
+}
+#holecard .lbl{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:rgba(180,200,255,.45);display:block;font-weight:bold;}
+#holecard .num{font-size:62px;font-weight:bold;color:#ffffff;line-height:1.0;display:block;letter-spacing:-.02em;}
+#holecard .par{font-size:11px;color:rgba(200,215,255,.65);letter-spacing:.10em;display:block;margin-top:1px;font-weight:bold;}
+#holecard .rel{font-size:11px;margin-top:2px;display:block;letter-spacing:.06em;font-weight:bold;}
+.rel-under{color:#40e8d8;}.rel-par{color:rgba(200,215,255,.65);}.rel-over{color:#ff8058;}
+/* Higher-specificity overrides so rel colours show inside completed scorecard rows */
+#scoretable td.rel-under,#final-sc td.rel-under{color:#40e8d8!important;}
+#scoretable td.rel-par, #final-sc td.rel-par {color:rgba(200,215,255,.65)!important;}
+#scoretable td.rel-over,#final-sc td.rel-over {color:#ff8058!important;}
+#holecard .dist{font-size:12px;color:rgba(200,215,255,.65);margin-top:7px;padding-top:6px;
+  border-top:1px solid rgba(80,130,255,.45);display:block;letter-spacing:.04em;font-weight:bold;}
+#reset-btn{display:block;width:100%;margin-top:9px;background:rgba(5,15,120,.85);
+  border:1px solid rgba(80,130,255,.45);color:#ffffff;font-family:'Courier New',monospace;
+  font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:bold;
+  padding:6px 0;cursor:pointer;border-radius:3px;transition:all .15s;}
+#reset-btn:hover{background:rgba(20,50,200,.82);color:#ffffff;border-color:rgba(110,165,255,.75);}
+
+/* ── Power bar (right) ─── */
+#power-wrap{position:fixed;right:26px;top:50%;transform:translateY(-50%);
+  display:none;flex-direction:column-reverse;align-items:center;gap:8px;z-index:10;}
+#power-lbl{color:#ffffff;font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:bold;
+  writing-mode:vertical-rl;transform:rotate(180deg);}
+#power-track{width:12px;height:180px;background:rgba(5,15,120,.85);
+  border:1px solid rgba(80,130,255,.45);border-radius:6px;overflow:hidden;position:relative;}
+#power-fill{position:absolute;bottom:0;left:0;right:0;height:0%;border-radius:6px;
+  background:linear-gradient(to top,#168917 0%,#7ef020 40%,#fdcc00 65%,#ff5200 87%,#ff0f00 100%);
+  transition:height .04s linear;}
+
+/* ── Crosshair ─── */
+#xhair{position:fixed;top:50%;left:50%;width:0;height:0;pointer-events:none;z-index:10;display:none;}
+#xhair::before{content:'';position:absolute;width:22px;height:1px;background:rgba(200,220,255,.55);top:0;left:-11px;}
+#xhair::after {content:'';position:absolute;width:1px;height:22px;background:rgba(200,220,255,.55);top:-11px;left:0;}
+#xdot{position:fixed;top:50%;left:50%;width:4px;height:4px;background:rgba(200,220,255,.80);
+  border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:10;display:none;}
+
+/* ── Hint ─── */
+#hint{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  color:rgba(200,215,255,.65);font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:bold;
+  pointer-events:none;white-space:nowrap;z-index:10;}
+
+/* ── Plane selector (bottom-centre, above hint) ─── */
+#plane-sel{
+  position:fixed;bottom:48px;left:50%;transform:translateX(-50%);
+  display:none;gap:8px;z-index:11;
+}
+.pln-btn{
+  background:rgba(5,15,120,.85);border:1px solid rgba(80,130,255,.45);
+  color:#ffffff;font-family:'Courier New',monospace;font-size:10px;font-weight:bold;
+  letter-spacing:.13em;text-transform:uppercase;padding:7px 14px;
+  cursor:pointer;border-radius:3px;transition:all .14s;white-space:nowrap;
+}
+.pln-btn:hover{ background:rgba(20,50,200,.82);border-color:rgba(110,165,255,.75);color:#ffffff; }
+.pln-btn.active{
+  background:rgba(20,50,200,.82);border-color:rgba(110,165,255,.75);
+  color:#ffffff;box-shadow:0 0 12px rgba(80,130,255,.28);
+}
+
+/* ── Wind HUD (top-right) ─── */
+#wind-hud{
+  position:fixed;top:20px;right:20px;
+  background:rgba(10,30,160,.65);border:1px solid rgba(80,130,255,.45);
+  border-radius:4px;padding:10px 14px;z-index:10;display:none;
+  backdrop-filter:blur(6px);text-align:center;min-width:72px;
+}
+#wind-hud .wlbl{font-size:9px;letter-spacing:.22em;color:rgba(180,200,255,.45);
+  text-transform:uppercase;display:block;margin-bottom:5px;font-weight:bold;}
+#wind-canvas{display:block;margin:0 auto 5px;}
+#wind-spd{font-size:18px;font-weight:bold;color:#ffffff;
+  font-family:"Courier New",monospace;display:block;letter-spacing:.04em;}
+#wind-dir{font-size:10px;letter-spacing:.12em;color:rgba(200,215,255,.65);
+  display:block;margin-top:2px;font-weight:bold;}
+
+/* ── Aim HUD (top-right, below wind card) ─── */
+#aim-hud{position:fixed;top:128px;right:20px;color:rgba(200,215,255,.65);
+  font-size:11px;letter-spacing:.10em;text-align:right;pointer-events:none;line-height:2.1;z-index:10;display:none;font-weight:bold;}
+
+/* ── State label (center-top) ─── */
+#state-lbl{position:fixed;top:18px;left:50%;transform:translateX(-50%);
+  color:rgba(180,200,255,.45);font-size:10px;letter-spacing:.24em;text-transform:uppercase;pointer-events:none;z-index:10;font-weight:bold;}
+
+/* ── Flash messages ─── */
+#flash{position:fixed;top:36%;left:50%;transform:translateX(-50%);
+  background:rgba(120,20,0,.90);border:1px solid rgba(255,120,70,.65);
+  color:#ffffff;font-size:12px;letter-spacing:.18em;text-transform:uppercase;font-weight:bold;
+  padding:9px 26px;border-radius:4px;display:none;z-index:22;pointer-events:none;text-align:center;white-space:nowrap;}
+
+/* ── Persistent scorecard table (bottom-right) ─── */
+#scoretable{
+  position:fixed;bottom:20px;right:20px;background:rgba(10,30,160,.65);
+  border:1px solid rgba(80,130,255,.45);border-radius:4px;
+  padding:10px 13px;z-index:10;display:none;backdrop-filter:blur(8px);
+  min-width:220px;max-height:calc(100vh - 120px);overflow-y:auto;
+}
+#scoretable .st-title{font-size:9px;letter-spacing:.24em;color:rgba(180,200,255,.45);
+  text-align:center;margin-bottom:6px;text-transform:uppercase;font-weight:bold;}
+#scoretable table{border-collapse:collapse;width:100%;}
+#scoretable th{font-size:9px;letter-spacing:.16em;color:rgba(200,215,255,.65);font-weight:bold;
+  padding:1px 7px;text-align:center;border-bottom:1px solid rgba(80,130,255,.45);}
+#scoretable td{font-size:11px;padding:2px 7px;text-align:center;color:rgba(200,215,255,.65);
+  border-bottom:1px solid rgba(80,130,255,.14);font-weight:bold;}
+#scoretable tr.st-active td{color:#ffffff;font-weight:bold;}
+#scoretable tr.st-done  td{color:#a8c8ff;}
+#scoretable tr.st-pend  td{color:rgba(180,200,255,.45);}
+#scoretable tfoot td{color:#ffffff;border-top:1px solid rgba(80,130,255,.45);padding-top:4px;font-weight:bold;}
+/* TAB hint label inside scorecard */
+#scoretable .tab-hint{font-size:8px;letter-spacing:.18em;color:rgba(180,200,255,.45);text-align:center;
+  display:block;margin-top:5px;text-transform:uppercase;}
+
+/* ── Hole-complete overlay ─── */
+#complete{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  background:rgba(5,15,120,.85);border:1px solid rgba(80,130,255,.45);
+  border-radius:6px;padding:32px 55px;text-align:center;display:none;
+  backdrop-filter:blur(14px);z-index:20;box-shadow:0 0 55px rgba(60,100,255,.12);
+}
+#complete h2{color:#ffffff;font-size:20px;letter-spacing:.30em;text-transform:uppercase;margin-bottom:6px;font-weight:bold;}
+#complete .cpl-grade{font-size:30px;letter-spacing:.05em;font-weight:bold;color:#ffffff;margin-bottom:4px;}
+#complete .cpl-rel{font-size:12px;letter-spacing:.10em;color:rgba(200,215,255,.65);margin-bottom:3px;font-weight:bold;}
+#complete .cpl-det{font-size:11px;letter-spacing:.08em;color:rgba(200,215,255,.65);}
+#complete .cpl-btns{margin-top:20px;display:flex;gap:10px;justify-content:center;}
+#complete button{background:rgba(10,30,160,.65);border:1px solid rgba(80,130,255,.45);
+  color:#ffffff;font-family:'Courier New',monospace;font-size:11px;letter-spacing:.15em;font-weight:bold;
+  text-transform:uppercase;padding:9px 22px;cursor:pointer;border-radius:3px;transition:all .15s;}
+#complete button:hover{background:rgba(20,50,200,.82);border-color:rgba(110,165,255,.75);}
+
+/* ── Final scorecard overlay ─── */
+#final-sc{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  background:rgba(5,15,120,.85);border:1px solid rgba(80,130,255,.45);
+  border-radius:6px;padding:30px 44px;text-align:center;display:none;
+  backdrop-filter:blur(14px);z-index:21;max-width:520px;width:90vw;
+  box-shadow:0 0 60px rgba(60,100,255,.10);
+}
+#final-sc h2{color:#ffffff;font-size:19px;letter-spacing:.32em;text-transform:uppercase;margin-bottom:4px;font-weight:bold;}
+#final-sc .subtitle{font-size:10px;letter-spacing:.24em;color:rgba(180,200,255,.45);margin-bottom:16px;font-weight:bold;}
+#final-sc table{border-collapse:collapse;width:100%;margin-bottom:14px;}
+#final-sc th{font-size:9px;letter-spacing:.16em;color:rgba(200,215,255,.65);font-weight:bold;
+  padding:2px 9px;text-align:center;border-bottom:1px solid rgba(80,130,255,.45);}
+#final-sc td{font-size:11px;padding:3px 9px;text-align:center;color:rgba(200,215,255,.65);font-weight:bold;
+  border-bottom:1px solid rgba(80,130,255,.16);}
+#final-sc tr.done-row td:nth-child(5){font-weight:bold;color:#ffffff;}
+#final-sc .tot-row td{color:#ffffff;border-top:1px solid rgba(80,130,255,.45);padding-top:5px;font-weight:bold;}
+#final-sc .rnd-grade{font-size:22px;font-weight:bold;letter-spacing:.05em;color:#ffffff;margin:6px 0 2px;}
+#final-sc .rnd-rel{font-size:12px;letter-spacing:.10em;color:rgba(200,215,255,.65);margin-bottom:14px;font-weight:bold;}
+#final-sc button{background:rgba(10,30,160,.65);border:1px solid rgba(80,130,255,.45);
+  color:#ffffff;font-family:'Courier New',monospace;font-size:11px;letter-spacing:.15em;font-weight:bold;
+  text-transform:uppercase;padding:9px 26px;cursor:pointer;border-radius:3px;transition:all .15s;}
+#final-sc button:hover{background:rgba(20,50,200,.82);border-color:rgba(110,165,255,.75);}
+
+/* ── Flyby overlay ─── */
+#flyby-card{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-54%);
+  text-align:center;pointer-events:none;z-index:15;opacity:0;transition:opacity .8s;
+}
+#flyby-card .game-ttl{font-size:48px;letter-spacing:.38em;color:#ffffff;font-weight:bold;
+  text-shadow:0 0 48px rgba(80,130,255,.30);}
+#flyby-card .divider{width:125px;height:1px;background:rgba(80,130,255,.45);margin:11px auto;}
+#flyby-card .hole-line{font-size:11px;letter-spacing:.34em;color:rgba(200,215,255,.65);margin-top:5px;font-weight:bold;}
+#flyby-card .hole-name{font-size:19px;letter-spacing:.20em;color:#ffffff;margin-top:8px;font-weight:bold;}
+#flyby-card .hole-stat{font-size:11px;letter-spacing:.15em;color:rgba(200,215,255,.65);margin-top:4px;font-weight:bold;}
+/* ── Tap-in button ─── */
+/* ── Shot selection panel (tap-in range) ─── */
+#shot-sel{
+  position:fixed;bottom:56px;left:50%;transform:translateX(-50%);
+  display:none;flex-direction:column;align-items:center;gap:6px;z-index:12;
+}
+#shot-sel .ss-title{
+  font-size:9px;letter-spacing:.28em;color:rgba(200,215,255,.65);
+  text-transform:uppercase;margin-bottom:2px;font-weight:bold;
+}
+#shot-sel .ss-row{ display:flex;gap:8px; }
+.ss-btn{
+  background:rgba(5,15,120,.85);border:1px solid rgba(80,130,255,.45);
+  color:#ffffff;font-family:'Courier New',monospace;font-size:11px;font-weight:bold;
+  letter-spacing:.13em;text-transform:uppercase;
+  padding:9px 16px;cursor:pointer;border-radius:3px;
+  transition:all .14s;white-space:nowrap;line-height:1.5;
+  box-shadow:0 0 10px rgba(60,100,255,.12);
+}
+.ss-btn:hover{
+  background:rgba(20,50,200,.82);border-color:rgba(110,165,255,.75);
+  color:#ffffff;box-shadow:0 0 18px rgba(80,130,255,.25);
+}
+.ss-btn.ss-tap{
+  border-color:rgba(110,165,255,.75);color:#ffffff;
+  box-shadow:0 0 16px rgba(80,130,255,.22);
+}
+
+#flyby-skip{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  color:rgba(180,200,255,.45);font-size:10px;letter-spacing:.22em;text-transform:uppercase;font-weight:bold;
+  pointer-events:none;z-index:15;display:none;opacity:0;transition:opacity .6s;}
+
+/* ── Main Menu ─── */
+/* ── Google font import for word-art logo ── */
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@700&display=swap');
+
+/* ── Menu backdrop ── */
+#main-menu{
+  position:fixed;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;z-index:50;
+  overflow:hidden;
+  background:#2a6fa8; /* fallback */
+}
+
+/* Sky layer */
+#main-menu::before{
+  content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
+  background:
+    /* Deep sky blue top */
+    linear-gradient(180deg,
+      #2e7fc4 0%,
+      #4598d8 18%,
+      #68b8ee 38%,
+      #90ccf4 55%,
+      #b4daf8 68%,
+      #c8e6f0 78%,
+      /* horizon haze */
+      #d8eedc 86%,
+      /* hillside green fading in from bottom */
+      #8abe60 94%,
+      #5a9a30 100%
+    );
+}
+
+/* Animated volumetric clouds */
+#main-menu::after{
+  content:'';position:absolute;inset:0;pointer-events:none;z-index:1;
+  background:
+    /* Large central cumulus */
+    radial-gradient(ellipse 280px 120px at 52% 20%, rgba(255,255,255,.92) 0%, rgba(255,255,255,.60) 30%, transparent 65%),
+    /* Top-left cloud mass */
+    radial-gradient(ellipse 220px 90px  at 12% 12%, rgba(255,255,255,.85) 0%, rgba(255,255,255,.50) 35%, transparent 60%),
+    radial-gradient(ellipse 160px 70px  at 20% 22%, rgba(255,255,255,.75) 0%, rgba(255,255,255,.35) 40%, transparent 62%),
+    /* Top-right cloud */
+    radial-gradient(ellipse 180px 80px  at 82% 10%, rgba(255,255,255,.80) 0%, rgba(255,255,255,.45) 38%, transparent 62%),
+    radial-gradient(ellipse 120px 55px  at 90% 22%, rgba(255,255,255,.70) 0%, transparent 58%),
+    /* Mid-sky wisps */
+    radial-gradient(ellipse 100px 40px  at 38% 32%, rgba(255,255,255,.55) 0%, transparent 55%),
+    radial-gradient(ellipse  80px 30px  at 66% 28%, rgba(255,255,255,.45) 0%, transparent 55%),
+    /* Cloud shadow tones (undersides) */
+    radial-gradient(ellipse 200px 50px  at 50% 30%, rgba(160,190,220,.28) 0%, transparent 60%),
+    radial-gradient(ellipse 150px 35px  at 15% 26%, rgba(150,180,215,.22) 0%, transparent 55%);
+  animation: mm-clouds 28s linear infinite alternate;
+}
+
+@keyframes mm-clouds{
+  0%  { background-position: 0px 0px; }
+  100%{ background-position: 40px -8px; }
+}
+
+/* Mountain silhouette layer (SVG inline would be better but CSS can approximate) */
+#mm-mountains{
+  position:absolute;bottom:0;left:0;right:0;z-index:2;
+  pointer-events:none;
+  height:55%;
+}
+
+/* Content sits above all layers */
+#mm-content{
+  position:relative;z-index:10;
+  display:flex;flex-direction:column;align-items:center;
+  width:100%;
+}
+
+/* ── Paper plane SVG icon (hand-holding pose) ── */
+#mm-plane-wrap{
+  position:relative;margin-bottom:20px;
+  filter:drop-shadow(0 12px 32px rgba(60,100,160,.28));
+  animation:mm-float 4.2s ease-in-out infinite;
+}
+@keyframes mm-float{
+  0%,100%{transform:translateY(0) rotate(-2deg);}
+  50%{transform:translateY(-14px) rotate(1.5deg);}
+}
+
+/* ── Word-art logo ── */
+#mm-logo{
+  display:flex;flex-direction:column;align-items:center;margin-bottom:6px;
+  position:relative;
+}
+#mm-logo .wl-plane{
+  font-family:'Bebas Neue',Impact,sans-serif;
+  font-size:90px;line-height:.92;letter-spacing:.12em;
+  /* Warm white with sharp shadow mimicking photo light */
+  color:#f8f6f2;
+  text-shadow:
+    3px 3px 0 rgba(80,100,160,.35),
+    6px 6px 0 rgba(40,60,120,.20),
+    0 0 60px rgba(255,255,255,.60),
+    0 0 120px rgba(130,180,255,.25);
+  -webkit-text-stroke: 1px rgba(160,190,220,.40);
+}
+#mm-logo .wl-golf{
+  font-family:'Bebas Neue',Impact,sans-serif;
+  font-size:52px;line-height:.95;letter-spacing:.55em;
+  color:rgba(40,80,140,.85);
+  text-shadow:
+    2px 2px 0 rgba(255,255,255,.50),
+    -1px -1px 0 rgba(20,50,110,.30);
+  margin-top:-4px;
+  padding-left:.55em;/* offset for letter-spacing so it looks centred */
+}
+#mm-logo .wl-tagline{
+  font-family:'Rajdhani',sans-serif;
+  font-size:13px;letter-spacing:.35em;text-transform:uppercase;
+  color:rgba(60,90,140,.75);margin-top:6px;font-weight:700;
+}
+#mm-logo .wl-rule{
+  width:260px;height:2px;margin:10px auto 0;
+  background:linear-gradient(90deg,transparent,rgba(40,80,160,.35),transparent);
+}
+
+/* ── Buttons ── */
+.mm-btn{
+  display:block;width:300px;margin:0 auto 12px;
+  background:rgba(255,255,255,.22);
+  border:1.5px solid rgba(255,255,255,.65);
+  color:rgba(30,60,120,.92);
+  font-family:'Rajdhani','Courier New',monospace;font-size:15px;
+  font-weight:700;letter-spacing:.18em;text-transform:uppercase;
+  padding:14px 24px;cursor:pointer;border-radius:6px;
+  backdrop-filter:blur(10px);
+  transition:all .18s;text-align:center;
+  box-shadow:0 4px 18px rgba(40,80,160,.15);
+}
+.mm-btn:hover{
+  background:rgba(255,255,255,.42);
+  border-color:rgba(255,255,255,.90);
+  color:rgba(10,40,100,.98);
+  box-shadow:0 6px 28px rgba(40,80,160,.28);
+  transform:translateY(-2px);
+}
+.mm-btn .mm-btn-sub{
+  display:block;font-size:11px;letter-spacing:.12em;
+  color:rgba(60,90,160,.65);margin-top:3px;font-weight:700;
+}
+.mm-btn.mm-disabled{
+  opacity:.38;cursor:not-allowed;
+}
+#main-menu .mm-footer{
+  margin-top:32px;font-size:10px;letter-spacing:.18em;
+  color:rgba(60,90,140,.50);font-family:'Rajdhani',sans-serif;
+  text-transform:uppercase;font-weight:700;
+}
+
+/* ── Course map overlay ─── */
+#course-map{
+  position:fixed;inset:0;z-index:60;display:none;
+  background:rgba(8,22,8,.92);backdrop-filter:blur(10px);
+  align-items:center;justify-content:center;flex-direction:column;
+}
+#course-map canvas{border-radius:6px;box-shadow:0 0 40px rgba(60,200,60,.12);}
+#course-map .cm-title{
+  font-size:13px;letter-spacing:.30em;text-transform:uppercase;font-weight:bold;
+  color:rgba(200,220,200,.55);margin-bottom:12px;font-family:'Courier New',monospace;
+}
+#course-map .cm-hint{
+  font-size:10px;letter-spacing:.20em;text-transform:uppercase;font-weight:bold;
+  color:rgba(160,200,160,.38);margin-top:10px;font-family:'Courier New',monospace;
+}
+</style>
+</head>
+<body>
+
+<!-- ── Hole card ── -->
+<div id="holecard">
+  <span class="lbl">Strokes</span>
+  <span class="num" id="hc-num">0</span>
+  <span class="par" id="hc-par">Par 3 · Hole 1</span>
+  <span class="rel" id="hc-rel">–</span>
+  <span class="dist" id="hc-dist">Tee</span>
+  <button id="reset-btn" onclick="resetHole()">⟳  Reset Hole</button>
+</div>
+
+<!-- ── Power bar ── -->
+<div id="power-wrap">
+  <div id="power-lbl">Power</div>
+  <div id="power-track"><div id="power-fill"></div></div>
+</div>
+
+<!-- ── Crosshair ── -->
+<div id="xhair"></div><div id="xdot"></div>
+
+<!-- ── HUD ── -->
+<div id="hint"></div>
+<div id="wind-hud">
+  <span class="wlbl">Wind</span>
+  <canvas id="wind-canvas" width="46" height="46"></canvas>
+  <span id="wind-spd">– mph</span>
+  <span id="wind-dir">–</span>
+</div>
+<div id="aim-hud"><div id="hud-yaw">YAW  0.0°</div><div id="hud-pitch">PITCH 12°</div></div>
+<div id="state-lbl"></div>
+<div id="flash"></div>
+
+<!-- ── Scorecard table ── -->
+<div id="scoretable">
+  <div class="st-title">Planegolf · Scorecard</div>
+  <span class="tab-hint">[TAB] to toggle</span>
+  <table>
+    <thead><tr><th>HOLE</th><th>PAR</th><th>DIST</th><th>SCR</th><th>+/-</th></tr></thead>
+    <tbody id="sc-tbody"></tbody>
+    <tfoot><tr><td colspan="3">TOTAL</td><td id="st-tot">–</td><td id="st-trl">–</td></tr></tfoot>
+  </table>
+</div>
+
+<!-- ── Hole complete ── -->
+<div id="complete">
+  <h2 id="cpl-title">✈ Hole Complete</h2>
+  <div class="cpl-grade" id="cpl-grade"></div>
+  <div class="cpl-rel"   id="cpl-rel"></div>
+  <div class="cpl-det"   id="cpl-det"></div>
+  <div id="cpl-ai-row" style="display:none;flex-direction:column;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid rgba(80,130,255,.25);">
+    <div id="cpl-ai-score" style="font-size:12px;color:#ffffff;letter-spacing:.08em;font-weight:bold;"></div>
+    <div id="cpl-ai-delta" style="font-size:11px;color:rgba(200,215,255,.65);letter-spacing:.06em;margin-top:3px;font-weight:bold;"></div>
+  </div>
+  <div class="cpl-btns">
+    <button id="btn-again" onclick="resetHole()">↺ Retry</button>
+    <button id="btn-next"  onclick="nextHole()">Next Hole →</button>
+  </div>
+</div>
+
+<!-- ── Final scorecard ── -->
+<div id="final-sc">
+  <h2>✈ Round Complete</h2>
+  <div class="subtitle" id="fin-subtitle">Planegolf · Front 9</div>
+  <table id="final-tbl">
+    <thead><tr><th>HOLE</th><th>NAME</th><th>PAR</th><th>DIST</th><th>SCR</th><th>+/-</th><th>GRADE</th></tr></thead>
+    <tbody id="final-tbody"></tbody>
+    <tfoot><tr class="tot-row"><td colspan="4">TOTAL</td>
+      <td id="fin-tot">–</td><td id="fin-rel">–</td><td id="fin-grade-lbl"></td>
+    </tr></tfoot>
+  </table>
+  <div class="rnd-grade" id="fin-rndgrade"></div>
+  <div class="rnd-rel"   id="fin-rndrel"></div>
+  <div style="display:flex;gap:12px;justify-content:center;margin-top:4px;">
+    <button onclick="goToMenu()">☰ Menu</button>
+    <button onclick="startNewRound()">↺ Play Again</button>
+  </div>
+</div>
+
+<!-- ── Flyby ── -->
+<div id="flyby-card">
+  <div class="game-ttl">PLANEGOLF</div>
+  <div class="divider"></div>
+  <div class="hole-line" id="fb-line">NOW APPROACHING</div>
+  <div class="hole-name" id="fb-name">Hole 1 · Birch Bend</div>
+  <div class="hole-stat" id="fb-stat">Par 3 · 250' · Basket +12.5 ft</div>
+</div>
+<div id="flyby-skip">Click or press any key to skip</div>
+<div id="plane-sel">
+  <button class="pln-btn active" id="pln-0" onclick="selectPlane(0)">🛩 Driver<br><span style="font-size:7px;opacity:.6">250–350 ft · [1]</span></button>
+  <button class="pln-btn" id="pln-1" onclick="selectPlane(1)">✈ Midrange<br><span style="font-size:7px;opacity:.6">150–250 ft · [2]</span></button>
+  <button class="pln-btn" id="pln-2" onclick="selectPlane(2)">📄 Putter<br><span style="font-size:7px;opacity:.6">1–75 ft · [3]</span></button>
+</div>
+<div id="shot-sel">
+  <span class="ss-title">📍 Inside 5 ft · select shot</span>
+  <div class="ss-row">
+    <button class="ss-btn" id="ss-putt"       onclick="shotPutt()">🛩 Putt<br><span style="font-size:7px;opacity:.55">Normal throw [3]</span></button>
+    <button class="ss-btn" id="ss-push"       onclick="shotPushPutt()">↗ Push Putt<br><span style="font-size:7px;opacity:.55">Low flat release</span></button>
+    <button class="ss-btn ss-tap" id="ss-tapin" onclick="doTapIn()">📍 Tap In<br><span style="font-size:7px;opacity:.55">Hole complete</span></button>
+  </div>
+</div>
+
+<!-- ── Main Menu ── -->
+<div id="main-menu">
+
+  <!-- Mountain landscape SVG backdrop -->
+  <svg id="mm-mountains" viewBox="0 0 1200 380" preserveAspectRatio="xMidYMax meet" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <!-- Distant peak gradient: grey-purple rock -->
+      <linearGradient id="mtnDistG" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#8898a8"/>
+        <stop offset="40%" stop-color="#6a7888"/>
+        <stop offset="100%" stop-color="#556635"/>
+      </linearGradient>
+      <!-- Mid mountain: dark green slopes -->
+      <linearGradient id="mtnMidG" x1="0%" y1="0%" x2="20%" y2="100%">
+        <stop offset="0%" stop-color="#667755"/>
+        <stop offset="35%" stop-color="#4a6830"/>
+        <stop offset="100%" stop-color="#3a5820"/>
+      </linearGradient>
+      <!-- Near foreground hills: bright green -->
+      <linearGradient id="hillG" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#78c040"/>
+        <stop offset="60%" stop-color="#5a9a28"/>
+        <stop offset="100%" stop-color="#3a7018"/>
+      </linearGradient>
+      <!-- Valley floor -->
+      <linearGradient id="valleyG" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#88c848"/>
+        <stop offset="100%" stop-color="#4a8820"/>
+      </linearGradient>
+      <!-- Rock face highlight -->
+      <linearGradient id="rockHighG" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="rgba(200,215,230,.55)"/>
+        <stop offset="100%" stop-color="transparent"/>
+      </linearGradient>
+      <filter id="mtnBlur1"><feGaussianBlur stdDeviation="1.5"/></filter>
+      <filter id="mtnBlur2"><feGaussianBlur stdDeviation="0.6"/></filter>
+    </defs>
+
+    <!-- ── Atmosphere haze layer at horizon ── -->
+    <rect x="0" y="160" width="1200" height="60" fill="rgba(200,225,240,.22)"/>
+
+    <!-- ── Far distant peaks (pale, hazy) ── -->
+    <polygon points="0,380 0,220 80,195 140,170 190,155 250,168 310,152 360,165 420,145 490,160 550,142 610,155 660,140 720,158 780,148 840,162 900,145 970,160 1040,148 1100,165 1160,152 1200,168 1200,380"
+             fill="#aabbc8" opacity=".50" filter="url(#mtnBlur1)"/>
+
+    <!-- ── Primary dramatic peak range (centre-left) ── -->
+    <!-- Left main peak cluster -->
+    <polygon points="0,380 0,260 60,245 110,230 150,215 200,195 245,175 268,158 282,148 298,155 310,162 330,178 360,192 400,205 430,220 460,235 490,248 510,260 510,380"
+             fill="url(#mtnDistG)"/>
+    <!-- Centre tallest peak (sharp jagged) -->
+    <polygon points="240,380 240,240 265,210 278,185 290,165 300,152 308,145 316,152 326,168 340,188 358,210 375,235 390,255 390,380"
+             fill="url(#mtnDistG)"/>
+    <!-- Rock face catchlight on tall peak -->
+    <polygon points="300,152 308,145 316,152 322,168 338,188 352,210 310,200 295,178 298,162"
+             fill="url(#rockHighG)"/>
+    <!-- Right peak group -->
+    <polygon points="480,380 480,252 520,235 565,218 610,200 650,215 685,205 720,220 760,215 800,228 840,245 880,260 920,272 960,285 990,292 1020,285 1060,270 1100,258 1140,265 1180,272 1200,278 1200,380"
+             fill="url(#mtnDistG)"/>
+    <!-- Right peak spike -->
+    <polygon points="680,380 680,248 700,225 718,208 730,195 742,182 752,178 762,188 775,205 790,225 808,248 820,268 820,380"
+             fill="#788898"/>
+    <!-- Rock highlight right -->
+    <polygon points="742,182 752,178 762,188 770,204 755,215 742,205 738,192"
+             fill="url(#rockHighG)"/>
+
+    <!-- ── Mid-ground green slopes (darker lush) ── -->
+    <polygon points="0,380 0,295 40,285 80,278 120,272 155,268 185,272 215,278 250,290 280,300 310,308 340,312 370,308 400,300 430,288 460,278 490,270 520,265 550,268 580,278 610,290 650,302 700,312 750,318 800,312 850,300 900,288 950,278 1000,272 1050,268 1100,272 1150,282 1200,292 1200,380"
+             fill="url(#mtnMidG)"/>
+    <!-- Darker tree-line across mid slopes -->
+    <path d="M 0,310 Q 40,300 80,295 Q 120,290 155,292 Q 190,296 220,302 Q 260,308 300,312 Q 340,316 380,310 Q 420,304 460,295 Q 510,285 560,282 Q 610,284 660,292 Q 710,302 760,312 Q 810,318 860,312 Q 910,302 960,290 Q 1010,280 1060,276 Q 1110,274 1160,280 Q 1185,284 1200,288 L 1200,380 L 0,380 Z"
+          fill="#2a5015" opacity=".65"/>
+
+    <!-- ── Near foreground rolling hills ── -->
+    <!-- Left hill -->
+    <path d="M -10,380 Q 0,355 30,338 Q 60,322 90,318 Q 130,315 165,325 Q 195,335 220,350 Q 240,362 250,375 L 250,380 Z"
+          fill="url(#hillG)"/>
+    <!-- Left hill highlight (sunlit top) -->
+    <path d="M 30,338 Q 70,318 110,318 Q 140,318 165,325 Q 140,315 100,316 Q 65,318 30,330 Z"
+          fill="rgba(140,210,80,.45)"/>
+    <!-- Right foreground hill -->
+    <path d="M 950,380 Q 970,360 1000,342 Q 1035,325 1070,320 Q 1110,318 1150,330 Q 1180,342 1200,358 L 1200,380 Z"
+          fill="url(#hillG)"/>
+    <!-- Centre valley floor (bright, sun-drenched) -->
+    <path d="M 200,380 Q 230,365 270,358 Q 320,352 380,356 Q 430,360 460,368 Q 480,374 490,380 Z"
+          fill="#90d050" opacity=".70"/>
+    <path d="M 650,380 Q 680,368 720,360 Q 770,354 820,358 Q 870,364 910,374 Q 930,378 940,380 Z"
+          fill="#88c848" opacity=".60"/>
+
+    <!-- ── Bush/scrub silhouettes on slopes ── -->
+    <g fill="#2a5018" opacity=".75">
+      <ellipse cx="55"  cy="335" rx="22" ry="14"/>
+      <ellipse cx="88"  cy="328" rx="16" ry="10"/>
+      <ellipse cx="135" cy="326" rx="20" ry="12"/>
+      <ellipse cx="178" cy="332" rx="15" ry="9"/>
+      <ellipse cx="1025" cy="338" rx="20" ry="12"/>
+      <ellipse cx="1065" cy="330" rx="16" ry="10"/>
+      <ellipse cx="1110" cy="328" rx="22" ry="13"/>
+      <ellipse cx="1155" cy="334" rx="17" ry="10"/>
+    </g>
+
+    <!-- ── Wildflower dots foreground (tiny white/yellow) ── -->
+    <g opacity=".60">
+      <circle cx="35" cy="365" r="2" fill="#ffffc0"/>
+      <circle cx="55" cy="372" r="1.5" fill="#ffffff"/>
+      <circle cx="70" cy="368" r="2" fill="#ffffc0"/>
+      <circle cx="90" cy="375" r="1.5" fill="#ffffff"/>
+      <circle cx="110" cy="370" r="2" fill="#fffff0"/>
+      <circle cx="1100" cy="368" r="2" fill="#ffffc0"/>
+      <circle cx="1130" cy="374" r="1.5" fill="#ffffff"/>
+      <circle cx="1160" cy="370" r="2" fill="#ffffc0"/>
+    </g>
+  </svg>
+
+  <!-- All interactive content sits above the landscape -->
+  <div id="mm-content">
+
+  <!-- Paper airplane icon: dart-style, matches reference geometry -->
+  <div id="mm-plane-wrap">
+    <svg viewBox="0 0 340 200" width="340" height="200" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- Paper white/blue palette echoing the sky background -->
+        <linearGradient id="gTop" x1="0%" y1="0%" x2="100%" y2="60%">
+          <stop offset="0%"   stop-color="#ffffff"/>
+          <stop offset="50%"  stop-color="#e8f2fd"/>
+          <stop offset="100%" stop-color="#d0e2f8"/>
+        </linearGradient>
+        <linearGradient id="gMid" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%"   stop-color="#d8eaf8"/>
+          <stop offset="100%" stop-color="#aec8e8"/>
+        </linearGradient>
+        <linearGradient id="gBelly" x1="0%" y1="0%" x2="50%" y2="100%">
+          <stop offset="0%"   stop-color="#b8cee8"/>
+          <stop offset="100%" stop-color="#8aaace"/>
+        </linearGradient>
+        <filter id="pShadow">
+          <feDropShadow dx="4" dy="8" stdDeviation="12" flood-color="rgba(30,70,160,.28)"/>
+        </filter>
+      </defs>
+
+      <!--
+        Vertices (nose pointing right):
+          N  = nose tip            (322, 95)
+          TW = top wing tip        ( 14, 28)   ← far upper-left
+          MB = mid-back (tail top) ( 18,100)   ← left edge, upper
+          FP = fold point          (118,156)   ← belly crease meeting point
+          BB = back-bottom         ( 36,158)   ← tail lower-left corner
+      -->
+
+      <g filter="url(#pShadow)">
+
+        <!-- ① Top wing face — the big bright plane surface -->
+        <polygon points="322,95  14,28  18,100"
+                 fill="url(#gTop)"
+                 stroke="rgba(180,210,240,.50)" stroke-width="1"/>
+
+        <!-- ② Center fold to belly — medium shade triangle -->
+        <polygon points="322,95  18,100  118,156"
+                 fill="url(#gMid)"
+                 stroke="rgba(155,190,225,.45)" stroke-width="1"/>
+
+        <!-- ③ Belly shadow flap — the dark inner triangle at tail -->
+        <polygon points="18,100  36,158  118,156"
+                 fill="url(#gBelly)"
+                 stroke="rgba(130,168,210,.40)" stroke-width=".8"/>
+
+        <!-- Center ridge crease: nose → fold point -->
+        <line x1="322" y1="95" x2="118" y2="156"
+              stroke="rgba(155,192,232,.80)" stroke-width="2.5" stroke-linecap="round"/>
+
+        <!-- Leading edge: nose → top wing tip -->
+        <line x1="322" y1="95" x2="14" y2="28"
+              stroke="rgba(210,230,252,.65)" stroke-width="1.4"/>
+
+        <!-- Inner wing fold line (runs from top-wing-tip toward fold point) -->
+        <line x1="14" y1="28" x2="118" y2="156"
+              stroke="rgba(175,208,238,.50)" stroke-width="1"/>
+
+        <!-- Tail edge: mid-back to back-bottom -->
+        <line x1="18" y1="100" x2="36" y2="158"
+              stroke="rgba(145,182,220,.45)" stroke-width="1"/>
+
+        <!-- Nose highlight glint -->
+        <ellipse cx="316" cy="91" rx="7" ry="4"
+                 fill="rgba(255,255,255,.75)" transform="rotate(-20,316,91)"/>
+
+        <!-- Upper wing surface sheen (diagonal bright streak) -->
+        <line x1="80"  y1="48" x2="240" y2="90"
+              stroke="rgba(255,255,255,.38)" stroke-width="5"
+              stroke-linecap="round" opacity=".7"/>
+
+      </g>
+    </svg>
+  </div>
+
+  <!-- Word-art logo -->
+  <div id="mm-logo">
+    <div class="wl-plane">PLANE</div>
+    <div class="wl-golf">GOLF</div>
+    <div class="wl-tagline">Paper Airplane Golf</div>
+    <div class="wl-rule"></div>
+  </div>
+
+  <!-- Mode buttons -->
+  <button class="mm-btn" onclick="startSinglePlayer()" style="margin-top:28px;">
+    Solo Round
+    <span class="mm-btn-sub">Play all 9 holes · Par 38</span>
+  </button>
+  <button class="mm-btn" onclick="startVsAI()">
+    Player vs CPU
+    <span class="mm-btn-sub">Stroke play · Alternate shots · Live AI flight</span>
+  </button>
+
+  <div class="mm-footer">Front 9 · 9 Holes · Par 38</div>
+  </div><!-- /mm-content -->
+</div>
+
+<!-- ── Course Map overlay (M key) ── -->
+<div id="course-map">
+  <div class="cm-title">✈ Planegolf · Front 9 Course Map</div>
+  <canvas id="cm-canvas" width="700" height="630"></canvas>
+  <div class="cm-hint">[M] close map</div>
+</div>
+
+<div id="turn-banner" style="display:none;position:fixed;top:20%;left:50%;transform:translateX(-50%);background:rgba(10,30,160,.80);border:1px solid rgba(80,130,255,.60);color:#ffffff;font-size:14px;letter-spacing:.20em;text-transform:uppercase;font-weight:bold;padding:11px 30px;border-radius:4px;z-index:25;pointer-events:none;transition:opacity .4s;white-space:nowrap;text-align:center;backdrop-filter:blur(8px);"></div>
+
+<!-- ── Three.js ── -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+// =============================================================================
+//  PLANEGOLF v3  ·  3-Hole Course
+// =============================================================================
+//  TODO [MULTI-HOLE]  Add entries to HOLE_DEFS[] — loadHole(n) handles the rest
+//  TODO [PLANE-TYPES] Swap PLANE_CFG values + buildPlaneGeo() for new models
+//  TODO [AI-PLAYERS]  launchPlane() accepts optional override {yaw,pitch,pwr}
+//  TODO [HAZARDS]     Extend addTree pattern for bunkers, water, OOB stakes
+// =============================================================================
+
+const M_TO_FT = 3.28084;
+const ftExact = m => (m * M_TO_FT).toFixed(0);
+
+// =============================================================================
+//  THREE.JS SETUP  (static – lives for the whole session)
+// =============================================================================
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+Object.assign(renderer.domElement.style, { position:'fixed', inset:'0' });
+
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(66, 1, 0.05, 500);
+
+// Lights
+// Hemisphere: sky blue top, grass green bottom – mimics mountain light
+const hemiLight = new THREE.HemisphereLight(0x70b8e8, 0x4a8828, 0.72);
+scene.add(hemiLight);
+scene.add(new THREE.AmbientLight(0xd8eef0, 0.38));
+const sun = new THREE.DirectionalLight(0xfff5d8, 1.20);
+sun.position.set(38, 72, 28);
+sun.castShadow = true;
+sun.shadow.mapSize.width = sun.shadow.mapSize.height = 2048;
+Object.assign(sun.shadow.camera, { left:-80, right:80, top:80, bottom:-80, near:1, far:350 });
+scene.add(sun);
+scene.add(sun.target);
+// Blue sky fill from opposite direction
+const fillLight = new THREE.DirectionalLight(0x88c8f8, 0.35);
+fillLight.position.set(-30, 20, -40);
+scene.add(fillLight);
+
+// =============================================================================
+//  STATIC MESHES  (airplane, trail, arrow — rebuilt visuals per-hole not needed)
+// =============================================================================
+
+// TODO [PLANE-TYPES] Replace buildPlaneGeo + PLANE_CFG for alt paper-fold models
+function buildPlaneGeo() {
+  const v = {
+    nose:[ 0,     0.06,-1.00], lf:[-0.06, 0.04,-0.18], rf:[ 0.06, 0.04,-0.18],
+    lw:  [-0.82,  0.00, 0.44], rw:[ 0.82, 0.00, 0.44],
+    lb:  [-0.10,  0.04, 0.92], rb:[ 0.10, 0.04, 0.92], tc:[ 0,    0.23, 0.29],
+  };
+  const tris = [];
+  const t = (...k) => { for(let i=0;i<k.length;i+=3) tris.push(...v[k[i]],...v[k[i+1]],...v[k[i+2]]); };
+  t('nose','lf','tc','nose','tc','rf','lf','tc','lb','tc','rf','rb','tc','lb','rb');
+  t('lf','lw','lb','rf','rb','rw');
+  t('nose','rf','lf','lf','lb','lw','rf','rw','rb','lb','rb','tc');
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(tris), 3));
+  geo.computeVertexNormals();
+  return geo;
+}
+
+const airplane = new THREE.Mesh(
+  buildPlaneGeo(),
+  new THREE.MeshPhongMaterial({ color:0xf5f2ea, side:THREE.DoubleSide, shininess:80, specular:0x665555 })
+);
+airplane.castShadow = true; airplane.scale.setScalar(0.40); scene.add(airplane);
+
+const ridgeGeo = new THREE.BufferGeometry();
+ridgeGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0,0.23,0.28,0,0.06,-0.18]),3));
+const ridge = new THREE.Line(ridgeGeo, new THREE.LineBasicMaterial({color:0xbbbba8,transparent:true,opacity:0.40}));
+ridge.scale.setScalar(0.40); scene.add(ridge);
+
+const aimArrow = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(), 3.5, 0xffee44, 0.46, 0.28);
+scene.add(aimArrow);
+
+const TRAIL_MAX = 100;
+const trailBuf  = new Float32Array(TRAIL_MAX * 3);
+const trailGeom = new THREE.BufferGeometry();
+trailGeom.setAttribute('position', new THREE.BufferAttribute(trailBuf, 3));
+trailGeom.setDrawRange(0, 0);
+scene.add(new THREE.Line(trailGeom, new THREE.LineBasicMaterial({color:0xe5e5b8,transparent:true,opacity:0.32})));
+let trailCount = 0;
+
+// =============================================================================
+//  AI DISC MESH + TRAIL (always in scene, toggled visible)
+// =============================================================================
+const aiPlane = new THREE.Mesh(
+  buildPlaneGeo(),
+  new THREE.MeshPhongMaterial({ color:0xff5510, side:THREE.DoubleSide, shininess:90, specular:0x552200 })
+);
+aiPlane.castShadow = true; aiPlane.scale.setScalar(0.40); aiPlane.visible = false; scene.add(aiPlane);
+
+const AI_TRAIL_MAX = 100;
+const aiTrailBuf  = new Float32Array(AI_TRAIL_MAX * 3);
+const aiTrailGeom = new THREE.BufferGeometry();
+aiTrailGeom.setAttribute('position', new THREE.BufferAttribute(aiTrailBuf, 3));
+aiTrailGeom.setDrawRange(0, 0);
+scene.add(new THREE.Line(aiTrailGeom, new THREE.LineBasicMaterial({color:0xff7030,transparent:true,opacity:0.40})));
+let aiTrailCount = 0;
+
+const aiMarker = new THREE.Mesh(
+  new THREE.SphereGeometry(0.14, 8, 6),
+  new THREE.MeshPhongMaterial({ color:0xff4400, emissive:0x331000, shininess:60 })
+);
+aiMarker.visible = false; scene.add(aiMarker);
+
+// AI state
+const aiPos         = new THREE.Vector3();
+const aiVel         = new THREE.Vector3();
+const aiThrowOrigin = new THREE.Vector3();
+let   aiStrokes     = 0;
+let   aiHoledOut    = false;
+let   playerHoledOut = false;
+let   aiPrepTimer   = 0;
+let   aiTreeHitCD   = 0;
+let   turnBannerTimer = 0;
+// AI memory — updated on each failure, used by aiComputeThrow
+const aiMemory = {
+  obCount:    0,     // consecutive OOB count
+  treeCount:  0,     // tree hit count this hole
+  waterCount: 0,     // water landings this hole
+  bunkerCount:0,     // bunker landings this hole
+  lastLandX:  null,  // where last shot actually landed (X)
+  lastLandZ:  null,  // where last shot actually landed (Z)
+  lastYaw:    null,  // yaw used on last throw
+  lastPitch:  null,  // pitch used on last throw
+  lastPwr:    null,  // power used on last throw
+  treeAvoid:  [],    // list of {x,z,r} objects near AI throw path to dodge
+  obBias:     0,     // yaw offset nudge away from OOB direction (radians)
+  pwrScale:   1.0,   // power multiplier adjustment
+  pitchBoost: 0,     // extra pitch on next throw
+};
+
+
+
+// =============================================================================
+//  HOLE DEFINITIONS
+//  TODO [MULTI-HOLE] Add entries here; loadHole(n) handles everything else.
+//  Distances stored in feet; distM computed from distFt.
+// =============================================================================
+
+// Fairway path helper – min distance from (wx,wz) to piecewise-linear path
+function distToPath(wx, wz, pts) {
+  let d = Infinity;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [ax,az] = pts[i], [bx,bz] = pts[i+1];
+    const dx=bx-ax, dz=bz-az, len2=dx*dx+dz*dz;
+    if (len2 < 1e-6) continue;
+    const t = Math.max(0, Math.min(1, ((wx-ax)*dx+(wz-az)*dz)/len2));
+    d = Math.min(d, Math.hypot(wx-(ax+t*dx), wz-(az+t*dz)));
+  }
+  return d;
+}
+
+const HOLE_DEFS = [
+  // ── Hole 1: Birch Bend ─────────────────────────────────────── Par 3 · 250'
+  {
+    idx:0, name:"Birch Bend", par:3, distFt:250,
+    get distM(){ return this.distFt/M_TO_FT; }, // ≈ 76.2 m
+    basketPos: new THREE.Vector3(-5, 3.8, -76),
+    basketR: 0.95,
+    fairwayPts:[[0,0],[-2,-38],[-5,-76]], fairwayW:5.5,
+    // Ground plane: width × depth × segsW × segsD
+    planeW:200, planeD:240, segsW:55, segsD:65,
+    sky:0x5baee8, fogNear:65, fogFar:175,
+    hillFn(wx,wz){
+      let h=0;
+      h+=1.30*Math.exp(-((wz+30)**2)/280)*Math.exp(-(wx**2)/80);
+      h+=0.65*Math.sin(wx*0.22+0.3)*Math.exp(-Math.abs(wz+22)/22);
+      h+=0.85*Math.sin(wx*0.10+0.8)*Math.cos(wz*0.08+0.4);
+      h+=0.45*Math.cos(wx*0.28-0.9)*Math.sin(wz*0.14+1.1);
+      h+=0.25*Math.sin(wx*0.38+wz*0.11+0.5);
+      h+=0.15*Math.sin(wx*0.82+1.1)*Math.cos(wz*0.75+0.6);
+      return h;
+    },
+    // [x, z, scale]  – taller values = taller tree + larger collision cylinder
+    trees:[
+      [-6.5,-8, 1.5],[-7.0,-18,1.7],[-6.0,-30,1.6],[-7.5,-42,1.4],[-6.0,-56,1.8],[-7.0,-67,1.5],
+      [ 7.0,-6, 1.4],[ 8.0,-16,1.6],[ 7.5,-27,1.5],[ 8.5,-39,1.7],[ 7.0,-52,1.4],[ 8.0,-64,1.6],
+      [-3.0,-83,1.3],[ 1.0,-85,1.6],[ 5.5,-81,1.4],
+    ],
+    roundTrees:[
+      [12.5,-12,1.3],[14.0,-28,1.5],[13.5,-50,1.4],[12.0,-70,1.6],
+      [-12.0,-15,1.2],[-13.5,-38,1.4],[-12.0,-60,1.5],[-11.0,-73,1.3],
+      [ 3.0,-90,1.4],[-8.0,-91,1.3],
+    ],
+    rocks:[[7,-5,0.85],[8.5,-6,0.55],[8,-8,0.70],[-9,-30,0.65],[-10,-32,0.90],[-8,-31,0.50],[8,-65,0.75],[9.5,-64,0.55],[-3,-80,0.95]],
+    bunkers:[{cx:-8,cz:-68,rx:8,rz:6,rot:0.3}],
+    water:[{cx:-16,cz:-35,rx:12,rz:9,rot:0.5}],
+  },
+  // ── Hole 2: River Dog ──────────────────────────────────── Par 4 · 390'
+  {
+    idx:1, name:"River Dog", par:4, distFt:390,
+    get distM(){ return this.distFt/M_TO_FT; }, // ≈ 118.9 m  basket (42,4.5,-112) dist≈119.6 m≈392'
+    basketPos: new THREE.Vector3(42, 4.5, -112),
+    basketR: 0.95,
+    fairwayPts:[[0,0],[3,-55],[42,-112]], fairwayW:5.0,
+    planeW:220, planeD:310, segsW:55, segsD:80,
+    sky:0x4898d8, fogNear:70, fogFar:210,
+    hillFn(wx,wz){
+      let h=0;
+      h+=1.00*Math.exp(-((wz+55)**2)/420)*Math.exp(-((wx-4)**2)/62);
+      h+=0.90*Math.sin(wx*0.15+1.2)*Math.exp(-Math.abs(wz+50)/36);
+      h+=0.75*Math.cos(wx*0.09+0.6)*Math.sin(wz*0.06+0.8);
+      h+=0.55*Math.sin(wx*0.24-0.7)*Math.cos(wz*0.12+0.9);
+      h+=0.30*Math.cos(wx*0.36+wz*0.10+0.3);
+      h+=0.18*Math.sin(wx*0.78+0.9)*Math.cos(wz*0.72+0.4);
+      return h;
+    },
+    trees:[
+      // Left flank (initial straight segment)
+      [-6.0,-8, 1.5],[-7.0,-20,1.7],[-6.5,-32,1.6],[-7.0,-45,1.5],[-6.0,-54,1.7],
+      // Blocking the inside shortcut (inside of the right dogleg corner)
+      [ 6.0,-58,2.0],[10.5,-62,2.2],[14.0,-68,2.1],[10.0,-76,2.0],[12.5,-83,1.9],[8.0,-92,2.1],
+      // Right outer edge of second segment
+      [47.0,-72,1.6],[49.0,-86,1.8],[50.0,-99,1.5],[48.0,-110,1.7],
+      // Far left & near green
+      [-5.0,-90,1.6],[-8.0,-102,1.8],[36.0,-120,1.4],[50.0,-117,1.6],
+    ],
+    roundTrees:[
+      [-11.0,-10,1.4],[-12.0,-28,1.5],[-11.0,-45,1.3],
+      [55.0,-75,1.4],[56.0,-92,1.6],[55.0,-107,1.4],
+      [24.0,-120,1.5],[28.0,-115,1.3],[18.0,-124,1.4],
+    ],
+    rocks:[[-4,-20,0.80],[-5,-22,0.60],[7,-65,1.0],[9,-66,0.75],[10,-64,0.55],[48,-88,0.85],[50,-86,0.65]],
+    bunkers:[{cx:52,cz:-75,rx:9,rz:7,rot:0.4}],
+    water:[{cx:15,cz:-52,rx:24,rz:4.5,rot:0.25}],
+  },
+  // ── Hole 3: The Serpent ───────────────────────────────── Par 5 · 880'
+  {
+    idx:2, name:"The Serpent", par:5, distFt:880,
+    // Fairway path segments: (0→-22,-90)≈92.7m + (-22,-90→12,-180)≈96.2m + (12,-180→20,-260)≈80.4m = 269.3m ≈ 883'
+    get distM(){ return this.distFt/M_TO_FT; },
+    basketPos: new THREE.Vector3(20, 5.0, -260),
+    basketR: 0.95,
+    fairwayPts:[[0,0],[-22,-90],[12,-180],[20,-260]], fairwayW:6.0,
+    planeW:260, planeD:630, segsW:58, segsD:110,
+    sky:0x5aa8e0, fogNear:85, fogFar:420,
+    hillFn(wx,wz){
+      let h=0;
+      h+=1.80*Math.exp(-((wz+90) **2)/820)*Math.exp(-((wx+4)**2)/125);
+      h+=1.25*Math.exp(-((wz+185)**2)/620)*Math.exp(-((wx-5)**2)/105);
+      h+=1.00*Math.sin(wx*0.09+0.5)*Math.cos(wz*0.05+0.3);
+      h+=0.65*Math.cos(wx*0.15-0.6)*Math.sin(wz*0.07+1.0);
+      h+=0.40*Math.sin(wx*0.25+wz*0.08+0.7);
+      h+=0.22*Math.sin(wx*0.65+0.8)*Math.cos(wz*0.55+0.5);
+      return h;
+    },
+    trees:[
+      // Left flank — tee to first turn
+      [-8.0,-15,2.0],[-11.0,-35,2.2],[-13.0,-55,2.1],[-16.0,-70,2.3],[-19.0,-85,2.0],
+      // Blocking the inside of turn 1 (right side of path around the left bend)
+      [ 5.0,-80,2.3],[ 9.0,-84,2.5],[12.0,-91,2.2],[ 9.0,-98,2.4],[ 5.0,-105,2.1],
+      // Right flank — between the two turns
+      [-22.0,-108,2.1],[-20.0,-128,2.3],[-18.0,-150,2.2],[-15.0,-168,2.4],
+      // Blocking the inside of turn 2 (left side of path around the right bend)
+      [18.0,-174,2.2],[22.0,-183,2.4],[20.0,-193,2.1],[15.0,-201,2.3],
+      // Approach corridor — scattered
+      [ 5.0,-216,2.0],[ 8.0,-236,2.2],[-5.0,-221,2.1],
+      [28.0,-251,1.9],[-3.0,-257,2.1],[14.0,-269,1.8],
+      // Background atmosphere trees
+      [-28.0,-132,2.5],[22.0,-142,2.3],[-25.0,-202,2.4],[28.0,-197,2.2],
+    ],
+    roundTrees:[
+      [15.0,-20,1.4],[16.0,-45,1.6],[16.0,-70,1.5],
+      [-28.0,-38,1.5],[-30.0,-62,1.7],[-28.0,-86,1.5],
+      [26.0,-115,1.6],[28.0,-145,1.5],[25.0,-170,1.7],
+      [-32.0,-158,1.6],[-30.0,-185,1.4],[-28.0,-215,1.6],
+      [ 5.0,-268,1.4],[-10.0,-263,1.5],[30.0,-266,1.3],
+    ],
+    rocks:[[-6,-40,0.90],[-7,-42,0.65],[-5,-41,0.75],[12,-120,1.05],[13,-122,0.75],[-12,-190,0.90],[-13,-192,0.65],[-11,-191,0.60],[15,-255,0.85],[18,-258,0.60]],
+    bunkers:[{cx:-10,cz:-92,rx:9,rz:7,rot:0.5},{cx:15,cz:-225,rx:9,rz:7,rot:0.3}],
+    water:[{cx:0,cz:-162,rx:18,rz:13,rot:0.6}],
+  },
+  // ── Hole 4: Copper Creek ────────────────────────────────── Par 4 · 355'
+  // Left dogleg – sweeping right-to-left bend at the midpoint
+  {
+    idx:3, name:"Copper Creek", par:4, distFt:355,
+    get distM(){ return this.distFt/M_TO_FT; },
+    basketPos: new THREE.Vector3(-36, 4.2, -105),
+    basketR: 0.95,
+    fairwayPts:[[0,0],[6,-52],[-36,-105]], fairwayW:5.0,
+    planeW:210, planeD:275, segsW:52, segsD:68,
+    sky:0x4890d0, fogNear:68, fogFar:195,
+    hillFn(wx,wz){
+      let h=0;
+      // Ridge that crosses the fairway at the dogleg
+      h+=1.60*Math.exp(-((wz+52)**2)/180)*Math.cos(wx*0.18);
+      h+=0.85*Math.sin(wx*0.18+0.6)*Math.exp(-Math.abs(wz+45)/28);
+      h+=0.70*Math.cos(wx*0.13+1.0)*Math.sin(wz*0.10+0.5);
+      h+=0.40*Math.sin(wx*0.32-0.8)*Math.cos(wz*0.16+0.7);
+      h+=0.20*Math.sin(wx*0.55+wz*0.12+0.9);
+      h+=0.12*Math.cos(wx*0.90+0.7)*Math.sin(wz*0.82+0.3);
+      return h;
+    },
+    trees:[
+      // Right flank – tee to dogleg
+      [7.5,-8,1.6],[9.0,-20,1.8],[8.5,-34,1.7],[8.0,-47,2.0],
+      // Blocking the inside corner of the left bend
+      [0,-60,2.2],[-5,-65,2.4],[-9,-72,2.1],[-8,-80,2.3],[-4,-88,2.0],
+      // Left flank – second segment
+      [-40,-68,1.7],[-42,-82,1.9],[-44,-96,1.6],[-42,-108,1.8],
+      // Background
+      [-15,-55,2.0],[12,-58,1.8],[-22,-115,1.6],[5,-115,1.5],
+    ],
+    roundTrees:[
+      [14.0,-10,1.3],[15.0,-28,1.5],[14.5,-44,1.4],
+      [-13.0,-12,1.4],[-14.5,-30,1.5],[-14.0,-48,1.3],
+      [-42.0,-78,1.4],[-44.0,-95,1.5],[-43.0,-112,1.3],
+    ],
+    rocks:[[10,-15,0.85],[11,-16,0.65],[12,-15,0.55],[-2,-48,1.05],[-1,-50,0.75],[-3,-49,0.60],[-38,-88,0.90],[-40,-90,0.65]],
+    bunkers:[{cx:-25,cz:-98,rx:8,rz:6,rot:0.4}],
+    water:[{cx:-12,cz:-58,rx:26,rz:4.5,rot:0.15}],
+  },
+  // ── Hole 5: Pines Pitch ──────────────────────────────────── Par 3 · 175'
+  // Straight-ish short hole, tight tree corridor, elevated basket
+  {
+    idx:4, name:"Pines Pitch", par:3, distFt:175,
+    get distM(){ return this.distFt/M_TO_FT; },
+    basketPos: new THREE.Vector3(5, 6.0, -53),
+    basketR: 0.95,
+    fairwayPts:[[0,0],[3,-27],[5,-53]], fairwayW:4.5,
+    planeW:175, planeD:170, segsW:45, segsD:44,
+    sky:0x3880c8, fogNear:55, fogFar:145,
+    hillFn(wx,wz){
+      let h=0;
+      h+=0.90*Math.exp(-((wz+26)**2)/150)*Math.exp(-(wx**2)/55);
+      h+=0.50*Math.sin(wx*0.25+0.4)*Math.exp(-Math.abs(wz+20)/18);
+      h+=0.60*Math.cos(wx*0.20+0.8)*Math.sin(wz*0.18+0.6);
+      h+=0.30*Math.sin(wx*0.45+wz*0.20+0.4);
+      h+=0.15*Math.sin(wx*1.0+0.5)*Math.cos(wz*0.95+0.8);
+      return h;
+    },
+    trees:[
+      // Dense corridor walls – tight on both sides
+      [-5.5,-6,1.4],[-5.0,-14,1.6],[-5.5,-24,1.5],[-5.0,-34,1.7],[-5.5,-44,1.4],
+      [ 5.8,-5,1.5],[ 6.0,-13,1.6],[ 6.5,-22,1.8],[ 6.0,-32,1.5],[ 6.2,-42,1.7],
+      // Near green – framing the target
+      [-7.0,-50,1.5],[10.0,-50,1.6],[-6.5,-57,1.4],[9.5,-58,1.5],
+      // Background atmosphere
+      [-10,-30,1.8],[11,-28,1.7],[-9,-38,1.6],[10,-40,1.8],
+    ],
+    roundTrees:[
+      [-10.0,-3,1.2],[11.0,-2,1.3],
+      [-9.0,-60,1.3],[9.0,-62,1.4],[0.0,-64,1.2],
+    ],
+    rocks:[[-8,-8,0.75],[-9,-10,0.55],[-7,-9,0.65],[8,-10,0.70],[9,-8,0.55],[-6,-46,0.85],[8,-46,0.65]],
+    bunkers:[{cx:5,cz:-42,rx:7,rz:5,rot:0}],
+    water:[{cx:-12,cz:-38,rx:8,rz:6.5,rot:0.3}],
+  },
+  // ── Hole 6: Long Hollow ──────────────────────────────────── Par 5 · 720'
+  // Gentle S-curve through a rolling valley, wide but punishing rough
+  {
+    idx:5, name:"Long Hollow", par:5, distFt:720,
+    get distM(){ return this.distFt/M_TO_FT; },
+    basketPos: new THREE.Vector3(-18, 4.5, -218),
+    basketR: 0.95,
+    fairwayPts:[[0,0],[8,-108],[-18,-218]], fairwayW:6.0,
+    planeW:240, planeD:530, segsW:56, segsD:105,
+    sky:0x52a8e4, fogNear:80, fogFar:380,
+    hillFn(wx,wz){
+      let h=0;
+      h+=1.40*Math.exp(-((wz+108)**2)/900)*Math.exp(-((wx-4)**2)/100);
+      h+=1.10*Math.exp(-((wz+175)**2)/700)*Math.exp(-((wx+6)**2)/90);
+      h+=0.80*Math.sin(wx*0.10+0.6)*Math.cos(wz*0.06+0.4);
+      h+=0.55*Math.cos(wx*0.18-0.5)*Math.sin(wz*0.08+0.9);
+      h+=0.35*Math.sin(wx*0.28+wz*0.09+0.6);
+      h+=0.18*Math.cos(wx*0.68+0.7)*Math.sin(wz*0.58+0.4);
+      return h;
+    },
+    trees:[
+      // Left edge – early segment
+      [-7,-12,1.6],[-8,-30,1.8],[-7,-55,1.7],[-9,-75,1.9],[-8,-95,1.7],
+      // Right edge – early segment
+      [8,-8,1.5],[9,-22,1.7],[10,-40,1.6],[11,-62,1.8],[10,-82,1.6],
+      // S-bend first curve (blocking inside of the right bend)
+      [8,-100,2.0],[11,-108,2.2],[10,-116,2.0],[8,-124,2.1],
+      // S-bend second curve (blocking inside of the left bend)
+      [-14,-168,2.0],[-17,-178,2.2],[-16,-188,2.0],[-14,-198,2.1],
+      // Approach corridor
+      [-22,-205,1.8],[0,-210,1.7],[-25,-215,1.6],[4,-216,1.8],
+      // Deep background
+      [-28,-130,2.2],[14,-140,2.0],[-26,-165,2.1],[16,-162,2.3],
+    ],
+    roundTrees:[
+      [14.0,-22,1.5],[16.0,-50,1.6],[15.0,-80,1.5],
+      [-14.0,-28,1.4],[-16.0,-60,1.5],[-15.0,-90,1.6],
+      [18.0,-120,1.5],[20.0,-155,1.6],[18.0,-190,1.4],
+      [-18.0,-140,1.5],[-20.0,-175,1.6],[-18.0,-208,1.4],
+    ],
+    rocks:[[5,-45,0.90],[6,-46,0.65],[7,-45,0.55],[-5,-118,1.05],[-6,-120,0.75],[-4,-119,0.85],[5,-180,0.90],[6,-182,0.65],[-8,-200,0.85],[-9,-202,0.60]],
+    bunkers:[{cx:6,cz:-88,rx:9,rz:7,rot:0.5},{cx:-14,cz:-200,rx:8,rz:6,rot:0.3}],
+    water:[{cx:-2,cz:-130,rx:18,rz:14,rot:0.5}],
+  },
+  // ── Hole 7: Ridge Runner ──────────────────────────────────── Par 4 · 415'
+  // Straight then hard right – high ridge to carry on the approach
+  {
+    idx:6, name:"Ridge Runner", par:4, distFt:415,
+    get distM(){ return this.distFt/M_TO_FT; },
+    basketPos: new THREE.Vector3(46, 4.8, -122),
+    basketR: 0.95,
+    fairwayPts:[[0,0],[2,-70],[46,-122]], fairwayW:5.2,
+    planeW:230, planeD:310, segsW:54, segsD:72,
+    sky:0x4898d8, fogNear:72, fogFar:215,
+    hillFn(wx,wz){
+      let h=0;
+      // Strong ridge at the dogleg – must carry the plane over it
+      h+=2.20*Math.exp(-((wz+68)**2)/120)*Math.exp(-(wx**2)/180);
+      h+=0.70*Math.sin(wx*0.14+0.8)*Math.exp(-Math.abs(wz+50)/32);
+      h+=0.65*Math.cos(wx*0.20+0.5)*Math.sin(wz*0.11+0.7);
+      h+=0.35*Math.sin(wx*0.30-0.6)*Math.cos(wz*0.18+0.4);
+      h+=0.22*Math.sin(wx*0.50+wz*0.14+0.5);
+      h+=0.14*Math.sin(wx*0.85+0.9)*Math.cos(wz*0.78+0.6);
+      return h;
+    },
+    trees:[
+      // Left flank
+      [-6,-8,1.6],[-7,-22,1.8],[-6,-38,1.7],[-7,-56,1.6],[-6,-68,2.0],
+      // Blocking shortcut inside the right bend
+      [5,-74,2.3],[10,-80,2.5],[14,-88,2.2],[11,-96,2.4],[8,-105,2.1],
+      // Right outer edge
+      [50,-80,1.7],[52,-95,1.9],[53,-110,1.6],[51,-120,1.8],
+      // Near green
+      [40,-130,1.5],[54,-128,1.7],[36,-126,1.4],
+    ],
+    roundTrees:[
+      [-12.0,-10,1.4],[-13.5,-28,1.5],[-12.0,-48,1.3],
+      [56.0,-62,1.5],[58.0,-78,1.6],[57.0,-95,1.4],[56.0,-115,1.5],
+      [30.0,-132,1.4],[22.0,-130,1.3],[-5.0,-128,1.4],
+    ],
+    rocks:[[-8,-15,0.85],[-9,-16,0.65],[-7,-15,0.55],[2,-62,1.15],[3,-64,0.85],[4,-62,0.65],[1,-63,0.95],[48,-115,0.80],[50,-112,0.60]],
+    bunkers:[{cx:28,cz:-78,rx:9,rz:7,rot:0.6}],
+    water:[{cx:22,cz:-95,rx:22,rz:4.5,rot:0.5}],
+  },
+  // ── Hole 8: Devil's Elbow ────────────────────────────────── Par 5 · 815'
+  // Sharp left-right double-dogleg, narrow fairway, unforgiving rough
+  {
+    idx:7, name:"Devil's Elbow", par:5, distFt:815,
+    get distM(){ return this.distFt/M_TO_FT; },
+    basketPos: new THREE.Vector3(-32, 5.0, -248),
+    basketR: 0.95,
+    fairwayPts:[[0,0],[28,-95],[-32,-248]], fairwayW:5.0,
+    planeW:240, planeD:590, segsW:55, segsD:108,
+    sky:0x4a9ad8, fogNear:80, fogFar:400,
+    hillFn(wx,wz){
+      let h=0;
+      h+=1.60*Math.exp(-((wz+95)**2)/600)*Math.exp(-((wx-10)**2)/110);
+      h+=1.30*Math.exp(-((wz+200)**2)/550)*Math.exp(-((wx+8)**2)/100);
+      h+=0.90*Math.sin(wx*0.12+0.7)*Math.cos(wz*0.07+0.5);
+      h+=0.60*Math.cos(wx*0.22-0.4)*Math.sin(wz*0.10+0.8);
+      h+=0.38*Math.sin(wx*0.35+wz*0.11+0.6);
+      h+=0.20*Math.cos(wx*0.70+0.8)*Math.sin(wz*0.62+0.5);
+      return h;
+    },
+    trees:[
+      // Left flank – tee to first turn
+      [-7,-12,1.8],[-9,-30,2.0],[-10,-55,1.9],[-11,-75,2.1],[-10,-90,1.8],
+      // Blocking inside of first right bend
+      [15,-88,2.4],[20,-96,2.5],[20,-106,2.2],[16,-114,2.4],[11,-122,2.1],
+      // Second segment flank (right side between turns)
+      [30,-130,2.0],[32,-150,2.2],[30,-172,2.0],[28,-195,2.1],
+      // Blocking inside of second left bend
+      [-18,-195,2.2],[-22,-206,2.4],[-24,-218,2.1],[-22,-230,2.3],[-18,-240,2.0],
+      // Approach
+      [-36,-245,1.8],[-10,-252,1.9],[-38,-255,1.7],[-8,-258,2.0],
+      // Background
+      [-25,-140,2.3],[24,-148,2.1],[-28,-178,2.2],[26,-182,2.0],
+    ],
+    roundTrees:[
+      [14.0,-15,1.5],[16.0,-40,1.6],[14.0,-68,1.5],
+      [-16.0,-18,1.4],[-18.0,-46,1.5],[-16.0,-72,1.4],
+      [32.0,-115,1.5],[34.0,-145,1.6],[32.0,-175,1.5],
+      [-32.0,-182,1.5],[-34.0,-210,1.6],[-32.0,-238,1.4],
+    ],
+    rocks:[[5,-22,0.85],[6,-24,0.60],[7,-22,0.70],[22,-85,1.05],[24,-88,0.75],[23,-86,0.90],[-10,-195,0.95],[-12,-198,0.65],[-11,-196,0.85],[-35,-242,0.90],[-36,-244,0.65]],
+    bunkers:[{cx:18,cz:-100,rx:9,rz:7,rot:0.5},{cx:-20,cz:-228,rx:8,rz:6,rot:0.4}],
+    water:[{cx:25,cz:-118,rx:16,rz:10,rot:0.6}],
+  },
+  // ── Hole 9: Skyline Finish ───────────────────────────────── Par 5 · 920'
+  // The finishing hole – grand sweeping par 5, slight right curve, wide open
+  {
+    idx:8, name:"Skyline Finish", par:5, distFt:920,
+    get distM(){ return this.distFt/M_TO_FT; },
+    basketPos: new THREE.Vector3(22, 5.5, -280),
+    basketR: 0.95,
+    fairwayPts:[[0,0],[-4,-140],[22,-280]], fairwayW:6.5,
+    planeW:255, planeD:650, segsW:58, segsD:112,
+    sky:0x5090d0, fogNear:90, fogFar:440,
+    hillFn(wx,wz){
+      let h=0;
+      h+=1.50*Math.exp(-((wz+140)**2)/1100)*Math.exp(-((wx+2)**2)/130);
+      h+=1.20*Math.exp(-((wz+245)**2)/800)*Math.exp(-((wx-8)**2)/115);
+      h+=1.00*Math.sin(wx*0.08+0.4)*Math.cos(wz*0.04+0.3);
+      h+=0.65*Math.cos(wx*0.14-0.6)*Math.sin(wz*0.06+0.9);
+      h+=0.42*Math.sin(wx*0.24+wz*0.07+0.5);
+      h+=0.22*Math.sin(wx*0.60+0.8)*Math.cos(wz*0.52+0.5);
+      return h;
+    },
+    trees:[
+      // Left flank – first half
+      [-9,-15,1.8],[-11,-40,2.0],[-12,-70,1.9],[-14,-100,2.2],[-13,-130,2.0],
+      // Right flank – first half
+      [9,-12,1.7],[11,-35,1.9],[12,-65,1.8],[13,-95,2.0],[12,-125,1.8],
+      // Slight curve – trees guiding the line
+      [-10,-155,2.1],[-8,-175,2.3],[12,-158,1.9],[14,-178,2.1],
+      // Second half – widening corridor
+      [-12,-205,2.2],[16,-200,2.0],[-10,-235,2.4],[18,-230,2.2],
+      // Approach frames
+      [10,-268,2.0],[28,-272,1.8],[-6,-275,2.1],[32,-280,1.7],
+      // Scenic background pines
+      [-28,-160,2.5],[22,-165,2.3],[-26,-220,2.4],[26,-215,2.2],
+    ],
+    roundTrees:[
+      [16.0,-22,1.5],[18.0,-55,1.6],[16.0,-90,1.5],
+      [-16.0,-25,1.4],[-18.0,-58,1.6],[-16.0,-92,1.5],
+      [20.0,-120,1.6],[22.0,-160,1.5],[20.0,-195,1.6],
+      [-18.0,-130,1.5],[-20.0,-168,1.6],[-18.0,-202,1.5],
+      [16.0,-240,1.5],[-12.0,-245,1.6],[24.0,-256,1.4],[-8.0,-270,1.5],
+    ],
+    rocks:[[8,-25,0.90],[9,-26,0.65],[10,-25,0.55],[-5,-75,1.05],[-6,-78,0.85],[-4,-76,0.65],[5,-150,0.90],[6,-152,0.65],[7,-150,0.55],[-8,-230,0.85],[-9,-232,0.60],[18,-272,0.95],[20,-275,0.65]],
+    bunkers:[{cx:15,cz:-255,rx:9,rz:7,rot:0.3},{cx:28,cz:-268,rx:8,rz:6,rot:0.5}],
+    water:[{cx:2,cz:-143,rx:40,rz:5,rot:0.08}],
+  },
+];
+
+// =============================================================================
+//  SCENE MANAGEMENT  –  rebuilt every time loadHole(n) is called
+// =============================================================================
+let dynObjs       = [];     // scene objects cleared on hole change
+let treeColliders = [];     // { x, z, r, h } for physics
+let currentDef    = null;   // set by loadHole before geometry build
+
+
+// ── Sky dome: gradient sphere – blue top, haze bottom ─────────────────────
+let skyDomeMesh = null;
+function buildSkyDome(baseColor) {
+  if (skyDomeMesh) { scene.remove(skyDomeMesh); skyDomeMesh.geometry.dispose(); skyDomeMesh.material.dispose(); }
+  const geo = new THREE.SphereGeometry(440, 32, 16);
+  // Vertex color gradient: pole = sky blue, equator = horizon haze, below = hill green
+  const col = geo.attributes.position;
+  const colors = [];
+  const skyCol   = new THREE.Color(baseColor);
+  const hazeCol  = new THREE.Color(0xc8e8f0);
+  const hillCol  = new THREE.Color(0x5a9830);
+  for (let i = 0; i < col.count; i++) {
+    const y = col.getY(i);
+    const norm = Math.max(-1, Math.min(1, y / 440));
+    let c;
+    if (norm > 0.1) {
+      c = skyCol.clone().lerp(hazeCol, 1 - norm);
+    } else {
+      c = hazeCol.clone().lerp(hillCol, (-norm + 0.1) / 1.1);
+    }
+    colors.push(c.r, c.g, c.b);
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
+  const mat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide });
+  skyDomeMesh = new THREE.Mesh(geo, mat);
+  scene.add(skyDomeMesh);
+
+  // Floating cloud planes (always-facing camera billboards at high altitude)
+  buildClouds();
+}
+
+let cloudMeshes = [];
+function buildClouds() {
+  for (const c of cloudMeshes) { scene.remove(c); c.geometry.dispose(); c.material.dispose(); }
+  cloudMeshes = [];
+  const cloudPositions = [
+    [ 60, 130, -180, 90, 45],
+    [-80, 145, -220, 120, 50],
+    [120, 125, -160, 80, 38],
+    [-40, 160, -260, 150, 55],
+    [200, 120, -140, 70, 35],
+    [-180, 140, -200, 100, 42],
+    [ 20, 155, -300,  130, 48],
+  ];
+  for (const [cx, cy, cz, w, h] of cloudPositions) {
+    const geo = new THREE.PlaneGeometry(w, h);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.55 + Math.random() * 0.25,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    // Squash into an ellipse-like shape using vertex offsets
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y2 = pos.getY(i);
+      const falloff = 1 - (x/(w*0.5))**2;
+      pos.setY(i, y2 * Math.max(0, falloff));
+    }
+    pos.needsUpdate = true;
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(cx, cy, cz);
+    mesh.userData.isCloud = true;
+    cloudMeshes.push(mesh);
+    scene.add(mesh);
+  }
+}
+
+function clearDyn() {
+  for (const o of dynObjs) {
+    scene.remove(o);
+    // Dispose GPU resources to prevent memory leaks across hole transitions
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) {
+      if (Array.isArray(o.material)) o.material.forEach(m => m.dispose());
+      else o.material.dispose();
+    }
+  }
+  dynObjs = []; treeColliders = [];
+}
+
+function addDyn(obj) { scene.add(obj); dynObjs.push(obj); return obj; }
+
+// Height at world (wx, wz) using currentDef.hillFn + tee/green fade-to-flat
+function terrainHeight(wx, wz) {
+  if (!currentDef) return 0;
+  const bp = currentDef.basketPos;
+  const teeFade   = Math.min(1.0, Math.hypot(wx, wz)               / 5.0);
+  const greenFade = Math.min(1.0, Math.hypot(wx - bp.x, wz - bp.z) / 6.5);
+  return currentDef.hillFn(wx, wz) * Math.min(teeFade, greenFade);
+}
+
+function buildGround(def) {
+  const geo = new THREE.PlaneGeometry(def.planeW, def.planeD, def.segsW, def.segsD);
+  const pos = geo.attributes.position;
+  const cols = [];
+  for (let i = 0; i < pos.count; i++) {
+    const wx = pos.getX(i), wz = -pos.getY(i);
+    const h = terrainHeight(wx, wz);
+    pos.setZ(i, h);
+    const onGreen   = Math.hypot(wx - def.basketPos.x, wz - def.basketPos.z) < 5.5;
+    const onFairway = !onGreen && distToPath(wx, wz, def.fairwayPts) < def.fairwayW;
+    const onWater   = !onGreen && !onFairway && def.water   && def.water.some(w   => inEllipse(wx,wz,w));
+    const onBunker  = !onGreen && !onFairway && !onWater && def.bunkers && def.bunkers.some(b => inEllipse(wx,wz,b));
+
+    // Cheap deterministic noise — 3 octaves of sin/cos products
+    const n1 = Math.sin(wx*2.31+wz*1.73)*0.5+0.5;
+    const n2 = Math.sin(wx*5.17+wz*4.89)*0.5+0.5;
+    const n3 = Math.sin(wx*11.3+wz*9.71)*0.5+0.5;
+    const n  = n1*0.55 + n2*0.30 + n3*0.15;   // 0-1
+
+    // Dirt-patch noise (slower, broader patches)
+    const dn = (Math.sin(wx*1.12+wz*0.89)*Math.cos(wx*0.74+wz*1.38))*0.5+0.5;
+    // Moss/dark variation
+    const mn = (Math.sin(wx*3.40+wz*2.11)*Math.cos(wx*1.82+wz*3.67))*0.5+0.5;
+
+    let r,g,b;
+    if (onGreen) {
+      // Putting green – tight mown, slight stripe variation
+      const stripe = Math.sin(wx*1.6-wz*0.8)*0.04;
+      r = 0.30 + n*0.12 + stripe; g = 0.72 + n*0.10 + stripe; b = 0.26 + n*0.06;
+    } else if (onFairway) {
+      // Mown grass – lighter stripes + subtle dirt bleed at edges
+      const stripe = Math.sin(wx*0.9+wz*0.5)*0.035;
+      const dirtBlend = Math.max(0, dn - 0.65) * 0.5;
+      r = 0.24 + n*0.10 + dirtBlend*0.18 + stripe;
+      g = 0.58 + n*0.12 - dirtBlend*0.08 + stripe;
+      b = 0.20 + n*0.06 - dirtBlend*0.04;
+    } else if (onWater) {
+      // Water – depth variation
+      r = 0.06 + n*0.06; g = 0.22 + n*0.14; b = 0.55 + n*0.18;
+    } else if (onBunker) {
+      // Sand bunker – gritty variation with pebble-like specks
+      const speck = n3 > 0.75 ? 0.06 : 0.0;
+      r = 0.74 + n*0.14 - speck; g = 0.66 + n*0.10 - speck; b = 0.36 + n*0.08 - speck;
+    } else {
+      // Rough – rich variation: lush grass, dead patches, exposed dirt, damp moss
+      const dirtPatch = dn > 0.68 ? (dn - 0.68)*2.5 : 0;   // bare dirt patches
+      const mossPatch = mn < 0.28 ? (0.28-mn)*1.8 : 0;      // dark damp moss
+      const deadGrass = n2 > 0.78 ? (n2-0.78)*1.4 : 0;      // yellowing grass
+      // Base rough green
+      r = 0.16 + n*0.10 + dirtPatch*0.32 + deadGrass*0.20 - mossPatch*0.04;
+      g = 0.40 + n*0.12 - dirtPatch*0.16 + deadGrass*0.12 + mossPatch*0.06;
+      b = 0.14 + n*0.06 - dirtPatch*0.08 - deadGrass*0.06 + mossPatch*0.04;
+    }
+    cols.push(Math.min(1,Math.max(0,r)), Math.min(1,Math.max(0,g)), Math.min(1,Math.max(0,b)));
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors:true }));
+  m.rotation.x = -Math.PI / 2; m.receiveShadow = true;
+  addDyn(m);
+}
+
+// Taller trees: two-tier cone canopy; stores cylindrical collider
+function addTree(wx, wz, scale) {
+  const ty = terrainHeight(wx, wz);
+  const th = 1.80 * scale;  // taller trunk
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.14*scale, 0.21*scale, th, 6),
+    new THREE.MeshLambertMaterial({ color:0x6b3e1a })
+  );
+  trunk.position.set(wx, ty + th*0.5, wz); trunk.castShadow = true; addDyn(trunk);
+  // Two-tier conical canopy
+  [[1.40, 1.60, 0x28721e],[0.88, 1.20, 0x368c2a]].forEach(([r,ch,col], i) => {
+    const cone = new THREE.Mesh(
+      new THREE.ConeGeometry(r*scale, ch*scale, 7),
+      new THREE.MeshLambertMaterial({ color:col })
+    );
+    cone.position.set(wx, ty + th + i*(ch*0.62)*scale + ch*scale*0.5, wz);
+    cone.castShadow = true; addDyn(cone);
+  });
+  // Collision cylinder: radius ≈ outer canopy, height from ground to top of canopy
+  const colH = ty + th + 1.6*scale + 1.2*scale;
+  treeColliders.push({ x:wx, z:wz, r:1.25*scale, h:colH });
+}
+
+// Deciduous oak/maple: round sphere canopy, wider spread
+function addRoundTree(wx, wz, scale) {
+  const ty = terrainHeight(wx, wz);
+  const th = 1.40 * scale;
+  const cr = 1.55 * scale;
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.16*scale, 0.24*scale, th, 7),
+    new THREE.MeshLambertMaterial({ color:0x8b6242 })
+  );
+  trunk.position.set(wx, ty + th*0.5, wz); trunk.castShadow = true; addDyn(trunk);
+  const lower = new THREE.Mesh(
+    new THREE.SphereGeometry(cr, 8, 6),
+    new THREE.MeshLambertMaterial({ color:0x3a7a24 })
+  );
+  lower.scale.y = 0.68;
+  lower.position.set(wx, ty + th + cr*0.60, wz); lower.castShadow = true; addDyn(lower);
+  const upper = new THREE.Mesh(
+    new THREE.SphereGeometry(cr*0.72, 7, 5),
+    new THREE.MeshLambertMaterial({ color:0x52a030 })
+  );
+  upper.scale.y = 0.72;
+  upper.position.set(wx, ty + th + cr*1.10, wz); upper.castShadow = true; addDyn(upper);
+  treeColliders.push({ x:wx, z:wz, r:cr, h:ty + th + cr*1.60 });
+}
+
+
+// ── Ellipse helper (XZ plane) used for bunker/water ──────────────────────────
+function inEllipse(wx, wz, e) {
+  const c = Math.cos(e.rot||0), s = Math.sin(e.rot||0);
+  const dx = wx - e.cx, dz = wz - e.cz;
+  const lx = dx*c + dz*s, lz = -dx*s + dz*c;
+  return (lx/e.rx)**2 + (lz/e.rz)**2 <= 1;
+}
+function inWater(wx, wz) {
+  return !!(currentDef?.water?.some(w => inEllipse(wx, wz, w)));
+}
+function inBunker(wx, wz) {
+  return !!(currentDef?.bunkers?.some(b => inEllipse(wx, wz, b)));
+}
+
+// ── Rock (icosahedron, no collision – decorative) ─────────────────────────────
+function addRock(wx, wz, scale) {
+  const ty = terrainHeight(wx, wz);
+  const hash = Math.abs(Math.sin(wx*127.1 + wz*311.7));
+  const colors = [0x888880, 0x7a7268, 0x6e7060, 0x8a8070, 0x7c6e62, 0x848872];
+  const col = colors[Math.floor(hash*6)];
+  const geo = new THREE.IcosahedronGeometry(scale, 0);
+  const mat = new THREE.MeshLambertMaterial({ color: col });
+  const mesh = new THREE.Mesh(geo, mat);
+  const sx = 0.72 + Math.abs(Math.sin(wx*73.1))*0.65;
+  const sy = 0.38 + Math.abs(Math.sin(wz*91.3))*0.46;
+  const sz = 0.78 + Math.abs(Math.sin(wx*47.3+wz*63.7))*0.48;
+  mesh.scale.set(sx, sy, sz);
+  mesh.rotation.set(Math.sin(wx*3.1)*0.5, wx*0.5, Math.sin(wz*2.7)*0.4);
+  mesh.position.set(wx, ty + scale*sy*0.4, wz);
+  mesh.castShadow = true;
+  addDyn(mesh);
+}
+
+// ── Flat ellipse mesh lying in world XZ plane ─────────────────────────────────
+function buildEllipseMesh(cx, ty, cz, rx, rz, rot, mat) {
+  const N = 24, c = Math.cos(rot||0), s = Math.sin(rot||0);
+  const pos = new Float32Array((N+1)*3);
+  pos[0]=pos[1]=pos[2]=0;
+  for(let i=0;i<N;i++){
+    const a=(i/N)*Math.PI*2, lx=rx*Math.cos(a), lz=rz*Math.sin(a);
+    pos[3+i*3  ] = lx*c - lz*s;
+    pos[3+i*3+1] = 0;
+    pos[3+i*3+2] = lx*s + lz*c;
+  }
+  const idx=[];
+  for(let i=0;i<N;i++) idx.push(0, i+1, (i+1)%N+1);
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  geo.setIndex(idx); geo.computeVertexNormals();
+  const m=new THREE.Mesh(geo,mat);
+  m.position.set(cx, ty+0.05, cz);
+  return m;
+}
+
+// ── Build rocks + bunker + water meshes for current hole ─────────────────────
+function buildHazards(def) {
+  // Rocks
+  if (def.rocks) {
+    for(const [wx,wz,sc] of def.rocks) addRock(wx,wz,sc);
+  }
+  // Bunkers – sand-coloured flat ellipse
+  if (def.bunkers) {
+    const sandMat = new THREE.MeshLambertMaterial({
+      color:0xd8bf6a, transparent:true, opacity:0.90, depthWrite:false });
+    for(const b of def.bunkers) {
+      const ty = terrainHeight(b.cx, b.cz);
+      addDyn(buildEllipseMesh(b.cx, ty, b.cz, b.rx, b.rz, b.rot, sandMat));
+      // Thin lip ring for definition
+      const lipMat = new THREE.MeshLambertMaterial({
+        color:0xc8a848, transparent:true, opacity:0.60, depthWrite:false });
+      addDyn(buildEllipseMesh(b.cx, ty, b.cz, b.rx+0.35, b.rz+0.35, b.rot, lipMat));
+    }
+  }
+  // Water – blue ellipse with subtle shimmer overlay
+  if (def.water) {
+    for(const w of def.water) {
+      const ty = terrainHeight(w.cx, w.cz);
+      const waterMat = new THREE.MeshLambertMaterial({
+        color:0x1a6faa, transparent:true, opacity:0.78, depthWrite:false });
+      addDyn(buildEllipseMesh(w.cx, ty, w.cz, w.rx, w.rz, w.rot, waterMat));
+      // Lighter highlight layer
+      const shimMat = new THREE.MeshLambertMaterial({
+        color:0x4aabdd, transparent:true, opacity:0.28, depthWrite:false });
+      addDyn(buildEllipseMesh(w.cx, ty+0.01, w.cz, w.rx*0.72, w.rz*0.72, (w.rot||0)+0.3, shimMat));
+    }
+  }
+}
+
+
+// ── Ground debris: grass tufts, fallen leaves, sticks ─────────────────────────
+function buildGroundDebris(def) {
+  // Deterministic seed per hole
+  let seed = def.idx * 6271 + 4441;
+  function sr(){ seed=(seed*1664525+1013904223)&0xffffffff; return Math.abs(seed)/0x7fffffff; }
+
+  const W = def.planeW * 0.44, D = def.planeD * 0.44;
+  const bp = def.basketPos;
+
+  // ── Shared materials (reused across all instances) ───────────────────────
+  const grassCols  = [0x3d7a1a,0x4a8820,0x5a9a28,0x2e6018,0x6aaa30,0x3a6e22,0x527c18,0x4e9040];
+  const leafCols   = [0xc84414,0xe06018,0xd05010,0xa83408,0xdc9020,0xb87c18,0x8e5c10,0xe08028,
+                      0x6a8a20,0x4e7a18,0x7a9c28]; // autumn + some green fallen
+  const stickCols  = [0x6a4820,0x7a5628,0x584018,0x7e6030,0x5a4422];
+
+  function rndMat(arr){ return new THREE.MeshLambertMaterial({color:arr[Math.floor(sr()*arr.length)]}); }
+
+  const TUFT_COUNT  = 280 + Math.floor(sr()*120);
+  const LEAF_COUNT  = 200 + Math.floor(sr()*100);
+  const STICK_COUNT = 80  + Math.floor(sr()*60);
+
+  // ── Grass tufts ──────────────────────────────────────────────────────────
+  for(let i=0;i<TUFT_COUNT;i++){
+    const wx=(sr()-0.5)*W*2, wz=-sr()*D;
+    // Skip green, fairway, water, and tee area
+    if(Math.hypot(wx,wz)<4) continue;
+    if(Math.hypot(wx-bp.x,wz-bp.z)<5) continue;
+    if(distToPath(wx,wz,def.fairwayPts)<def.fairwayW*0.9) continue;
+    if(def.water   && def.water.some(w=>inEllipse(wx,wz,w))) continue;
+    if(def.bunkers && def.bunkers.some(b=>inEllipse(wx,wz,b))) continue;
+
+    const ty   = terrainHeight(wx,wz);
+    const h    = 0.12 + sr()*0.22;  // 0.12–0.34 tall
+    const bladeCount = 2 + Math.floor(sr()*3);
+    for(let b2=0;b2<bladeCount;b2++){
+      const bx = wx + (sr()-0.5)*0.18, bz = wz + (sr()-0.5)*0.18;
+      const geo = new THREE.PlaneGeometry(0.05+sr()*0.04, h);
+      const mat = new THREE.MeshLambertMaterial({
+        color: grassCols[Math.floor(sr()*grassCols.length)],
+        side: THREE.DoubleSide
+      });
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(bx, ty+h*0.5, bz);
+      m.rotation.y = sr()*Math.PI;
+      m.rotation.z = (sr()-0.5)*0.35; // slight lean
+      addDyn(m);
+    }
+  }
+
+  // ── Fallen leaves ─────────────────────────────────────────────────────────
+  for(let i=0;i<LEAF_COUNT;i++){
+    const wx=(sr()-0.5)*W*2, wz=-sr()*D;
+    if(Math.hypot(wx,wz)<3) continue;
+    if(Math.hypot(wx-bp.x,wz-bp.z)<4) continue;
+    if(def.water&&def.water.some(w=>inEllipse(wx,wz,w))) continue;
+
+    const ty = terrainHeight(wx,wz);
+    const lw = 0.08+sr()*0.14, lh = 0.06+sr()*0.10;
+    const geo = new THREE.PlaneGeometry(lw,lh);
+    const mat = new THREE.MeshLambertMaterial({
+      color: leafCols[Math.floor(sr()*leafCols.length)],
+      side: THREE.DoubleSide, transparent:true, opacity:0.82+sr()*0.18
+    });
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(wx, ty+0.015+sr()*0.02, wz);
+    m.rotation.x = -Math.PI/2 + (sr()-0.5)*0.30; // mostly flat, slight curl
+    m.rotation.z = sr()*Math.PI*2;
+    addDyn(m);
+  }
+
+  // ── Sticks / twigs ────────────────────────────────────────────────────────
+  for(let i=0;i<STICK_COUNT;i++){
+    const wx=(sr()-0.5)*W*2, wz=-sr()*D;
+    if(Math.hypot(wx,wz)<3) continue;
+    if(Math.hypot(wx-bp.x,wz-bp.z)<4) continue;
+    if(def.water&&def.water.some(w=>inEllipse(wx,wz,w))) continue;
+
+    const ty = terrainHeight(wx,wz);
+    const len = 0.14+sr()*0.38;
+    const thick = 0.012+sr()*0.018;
+    const geo = new THREE.CylinderGeometry(thick*0.6, thick, len, 4);
+    const mat = rndMat(stickCols);
+    const m = new THREE.Mesh(geo,mat);
+    // Lay flat on ground, random heading
+    m.position.set(wx, ty+thick, wz);
+    m.rotation.x = Math.PI/2;
+    m.rotation.y = sr()*Math.PI*2;
+    // Slight tilt so they don't look perfectly flat
+    m.rotation.z = (sr()-0.5)*0.25;
+    addDyn(m);
+  }
+}
+
+function buildMarkers(def) {
+  const bp   = def.basketPos;
+  const ty   = terrainHeight(bp.x, bp.z); // should be ≈0 (green fade)
+
+  // ── Tee peg & ring ──
+  const teeTY = terrainHeight(0, 0); // ≈0
+  const teePeg = addDyn(new THREE.Mesh(
+    new THREE.CylinderGeometry(0.06, 0.09, 0.26, 8),
+    new THREE.MeshLambertMaterial({ color:0xf0d030 })
+  ));
+  teePeg.position.set(0, teeTY + 0.13, 0); teePeg.castShadow = true;
+  const teeRing = addDyn(new THREE.Mesh(
+    new THREE.RingGeometry(0.44, 0.57, 36),
+    new THREE.MeshLambertMaterial({ color:0xddb828, side:THREE.DoubleSide })
+  ));
+  teeRing.rotation.x = -Math.PI/2; teeRing.position.set(0, teeTY+0.012, 0);
+
+  // ── Basket ──
+  const bMesh = addDyn(new THREE.Mesh(
+    new THREE.SphereGeometry(def.basketR, 16, 10),
+    new THREE.MeshLambertMaterial({ color:0xff6200, wireframe:true, transparent:true, opacity:0.88 })
+  ));
+  bMesh.position.copy(bp);
+  const bFill = addDyn(new THREE.Mesh(
+    new THREE.SphereGeometry(def.basketR*0.85, 10, 7),
+    new THREE.MeshLambertMaterial({ color:0xff8432, transparent:true, opacity:0.09 })
+  ));
+  bFill.position.copy(bp);
+
+  // ── Basket pole ──
+  const poleH = bp.y - ty;
+  const pole = addDyn(new THREE.Mesh(
+    new THREE.CylinderGeometry(0.07, 0.09, poleH, 8),
+    new THREE.MeshLambertMaterial({ color:0x999999 })
+  ));
+  pole.position.set(bp.x, ty + poleH/2, bp.z); pole.castShadow = true;
+  // Collider: basket pole from ground to basket bottom
+  treeColliders.push({ x:bp.x, z:bp.z, r:0.18, h:bp.y - def.basketR, isPole:true });
+
+  // ── Tall flag / navigation marker (helps on long holes) ──
+  const flagH = 8.5;
+  const flagPole = addDyn(new THREE.Mesh(
+    new THREE.CylinderGeometry(0.045, 0.055, flagH, 6),
+    new THREE.MeshLambertMaterial({ color:0xdddddd })
+  ));
+  flagPole.position.set(bp.x, ty + flagH*0.5, bp.z); flagPole.castShadow = true;
+  // Collider: flag pole — narrow, full height
+  treeColliders.push({ x:bp.x, z:bp.z, r:0.12, h:ty + flagH, isPole:true });
+  // Pennant — small triangle flag attached to pole top, angled outward so it's visible in profile
+  const pennGeo = new THREE.BufferGeometry();
+  const px = bp.x, py = ty + flagH, pz = bp.z;
+  pennGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+    px,       py,        pz,          // top-left (tip at pole)
+    px + 1.8, py - 0.4,  pz + 0.3,   // right tip (angled slightly toward camera)
+    px,       py - 1.1,  pz,          // bottom-left
+    // Back face (slightly offset so DoubleSide shows depth)
+    px,       py,        pz,
+    px,       py - 1.1,  pz,
+    px + 1.8, py - 0.4,  pz + 0.3,
+  ]), 3));
+  pennGeo.computeVertexNormals();
+  addDyn(new THREE.Mesh(pennGeo, new THREE.MeshLambertMaterial({color:0xff1800, side:THREE.DoubleSide})));
+
+  // ── Spinning aim ring ──
+  const aRing = addDyn(new THREE.Mesh(
+    new THREE.TorusGeometry(def.basketR*1.22, 0.055, 8, 36),
+    new THREE.MeshLambertMaterial({ color:0xffd600 })
+  ));
+  aRing.position.copy(bp);
+  // Store for animation
+  currentAimRing = aRing;
+  currentBasketMesh = bMesh;
+  currentBasketFill = bFill;
+}
+
+// Called once per hole – clear old geometry, rebuild everything
+function loadHole(idx) {
+  clearDyn();
+  currentDef = HOLE_DEFS[idx];
+  currentHoleIdx = idx;
+
+  // Update scene atmosphere
+  renderer.setClearColor(currentDef.sky);
+  scene.fog = new THREE.Fog(currentDef.sky, currentDef.fogNear, currentDef.fogFar);
+  buildSkyDome(currentDef.sky);
+
+  // Re-aim the shadow camera to cover this hole's fairway.
+  // Compute the axis-aligned bounding box of the fairway path + some margin.
+  const allX = currentDef.fairwayPts.map(p=>p[0]);
+  const allZ = currentDef.fairwayPts.map(p=>p[1]);
+  const midX  = (Math.max(...allX) + Math.min(...allX)) / 2;
+  const midZ  = (Math.max(...allZ) + Math.min(...allZ)) / 2;
+  const spanX = Math.max(...allX) - Math.min(...allX) + 60;  // +margin
+  const spanZ = Math.max(...allZ) - Math.min(...allZ) + 60;
+  const halfX = spanX / 2, halfZ = spanZ / 2;
+
+  sun.target.position.set(midX, 0, midZ);
+  sun.target.updateMatrixWorld();
+  sun.position.set(midX + 30, 58, midZ + 22);
+  Object.assign(sun.shadow.camera, {
+    left:   -halfX,
+    right:   halfX,
+    top:     Math.max(80, halfZ),
+    bottom: -Math.max(80, halfZ),
+    near: 1,
+    far: Math.hypot(spanX, spanZ) + 150,
+  });
+  sun.shadow.camera.updateProjectionMatrix();
+
+  buildGround(currentDef);
+  buildGroundDebris(currentDef);
+  for (const [tx, tz, ts] of currentDef.trees) addTree(tx, tz, ts);
+  if (currentDef.roundTrees) {
+    for (const [tx, tz, ts] of currentDef.roundTrees) addRoundTree(tx, tz, ts);
+  }
+  buildHazards(currentDef);
+  spawnWildlife(currentDef);
+  buildMarkers(currentDef);
+  currentHolePolygon = buildHoleOBPolygon(currentDef);
+  buildRopeBoundary(currentDef);
+
+  // Update HUD labels
+  document.getElementById('hc-par').textContent = `Par ${currentDef.par} · Hole ${idx+1}`;
+  generateWind();
+  updateScoreTableHighlight();
+  updateFlybyCard(currentDef);
+}
+
+// =============================================================================
+//  GAME STATE
+// =============================================================================
+const S = Object.freeze({ FLYBY:0, AIMING:1, POWER:2, FLYING:3, LANDED:4, COMPLETE:5, FINAL:6 });
+const S_AI_PREP   = 7; // brief pause before CPU throws
+const S_AI_FLYING = 8; // CPU disc in flight
+let gameMode = 'solo'; // 'solo' | 'vsai'
+let aiScores  = Array(9).fill(null);
+let aiName    = 'CPU';
+let state        = S.FLYBY;
+let strokes      = 0;           // current hole strokes
+let currentHoleIdx = 0;
+const holeScores   = Array(9).fill(null); // filled as holes complete — one per HOLE_DEF
+
+// Aim
+let aimYaw   = 0;  // overwritten by yawToward() before first use
+let aimPitch = 0.22;
+
+// Power
+let power = 0, powerDir = 1;
+
+// Physics
+const planePos    = new THREE.Vector3();
+const planeVel    = new THREE.Vector3();
+const throwOrigin = new THREE.Vector3(); // where next throw starts (golf lie rule)
+
+// Camera
+let camAngle = 0;
+
+// Flyby
+let flybyT = 0, flybySkipped = false, flybyDur = 8;
+let flybyCamSpline = null, flybyLookSpline = null;
+
+// Animated basket refs (set by buildMarkers)
+let currentAimRing = null, currentBasketMesh = null, currentBasketFill = null;
+
+// Tree hit cooldown (prevents spam flash)
+let treeHitCD = 0;
+
+// =============================================================================
+//  PHYSICS CONSTANTS  +  PLANE TYPES
+// =============================================================================
+const GRAVITY = 9.2;
+
+// Each plane type: { label, speedMin m/s, speedMax m/s, lift, drag }
+// Speed ranges tuned so full-power distance ≈ stated ft range (at 18° pitch, no wind)
+const PLANE_TYPES = [
+  { id:0, label:"Driver",   speedMin:11.5, speedMax:24.5, lift:0.62, drag:0.17 }, // ~130-370 ft
+  { id:1, label:"Midrange", speedMin: 8.5, speedMax:19.5, lift:0.56, drag:0.25 }, // ~50-170 ft
+  { id:2, label:"Putter",   speedMin: 5.5, speedMax:28.0, lift:0.14, drag:0.82 }, // ~20-86 ft (heavy drag)
+];
+let activePlane = PLANE_TYPES[0];
+
+function selectPlane(idx) {
+  activePlane = PLANE_TYPES[idx];
+  PLANE_TYPES.forEach((_,i)=>{
+    const b = document.getElementById("pln-"+i);
+    if(b) b.className = "pln-btn" + (i===idx ? " active" : "");
+  });
+}
+window.selectPlane = selectPlane;
+// Wind – randomly generated per hole
+let WIND_SPEED = 0;       // m/s (converted to display mph)
+let WIND_ANGLE = 0;       // radians, 0=North (+Z), clockwise
+const WIND_VEC = new THREE.Vector3();
+
+function generateWind() {
+  // Speed: 1-5 on a display scale mapped to realistic m/s values
+  // Display "1-5 mph" maps to 0.45-2.24 m/s in physics
+  const displayMph = Math.floor(Math.random() * 5) + 1; // 1-5
+  WIND_SPEED = displayMph * 0.447;  // mph → m/s
+  WIND_ANGLE = Math.random() * Math.PI * 2;
+  // Horizontal only – wind pushes in XZ plane
+  WIND_VEC.set(
+    Math.sin(WIND_ANGLE) * WIND_SPEED,
+    0,
+    Math.cos(WIND_ANGLE) * WIND_SPEED
+  );
+  updateWindHUD();
+}
+
+function updateWindHUD() {
+  const displayMph = Math.round(WIND_SPEED / 0.447);
+  const dirs = ["N","NE","E","SE","S","SW","W","NW"];
+  const dirLabel = dirs[Math.round(WIND_ANGLE / (Math.PI/4)) % 8];
+  document.getElementById("wind-spd").textContent = displayMph + " mph";
+  document.getElementById("wind-dir").textContent = dirLabel;
+  // Draw arrow on canvas
+  const cv = document.getElementById("wind-canvas");
+  const ctx = cv.getContext("2d");
+  const cx = 23, cy = 23, r = 17;
+  ctx.clearRect(0, 0, 46, 46);
+  // Compass ring
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+  ctx.strokeStyle = "rgba(80,130,255,.35)"; ctx.lineWidth = 1; ctx.stroke();
+  // Arrow tip points IN the direction wind is blowing TOWARD
+  // WIND_ANGLE: 0=blowing south (+Z world → down screen), π/2=blowing west
+  // Canvas: 0=up. Wind blowing "North" means arrow points up (screen -Y).
+  // WIND_ANGLE 0 = North (+Z toward screen is south, but wind coming FROM north blows TO south)
+  // We show where wind pushes the plane: WIND_ANGLE 0 = arrow points down (south)
+  const screenAngle = WIND_ANGLE; // 0=wind pushes toward +Z = down screen
+  const ax = cx + Math.sin(screenAngle) * (r - 3);
+  const ay = cy + Math.cos(screenAngle) * (r - 3);
+  const tx = cx - Math.sin(screenAngle) * 5;
+  const ty = cy - Math.cos(screenAngle) * 5;
+  // Shaft
+  ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(ax, ay);
+  ctx.strokeStyle = "#a0c0ff"; ctx.lineWidth = 2; ctx.stroke();
+  // Arrowhead
+  const hw = Math.PI * 0.38;
+  const headLen = 7;
+  const a1 = screenAngle + Math.PI + hw;
+  const a2 = screenAngle + Math.PI - hw;
+  ctx.beginPath();
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(ax + Math.sin(a1)*headLen, ay + Math.cos(a1)*headLen);
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(ax + Math.sin(a2)*headLen, ay + Math.cos(a2)*headLen);
+  ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2; ctx.stroke();
+}
+
+// =============================================================================
+//  INPUT
+// =============================================================================
+let lastMX = 0, lastMY = 0, mouseReady = false;
+
+window.addEventListener('mousemove', e => {
+  if (!mouseReady) { lastMX = e.clientX; lastMY = e.clientY; mouseReady = true; return; }
+  const dx = e.clientX - lastMX, dy = e.clientY - lastMY;
+  lastMX = e.clientX; lastMY = e.clientY;
+  if (state === S.AIMING || state === S.POWER) {
+    // Full 360° yaw: mouse right → aim right; no clamping
+    aimYaw   += dx * 0.0045;
+    // Mouse up (negative dy) → raises pitch → higher trajectory
+    aimPitch -= dy * 0.0030;
+    aimPitch  = Math.max(-0.30, Math.min(0.78, aimPitch));
+  }
+});
+
+window.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  if (state === S.FLYBY)  { skipFlyby(); return; }
+  if (state === S.AIMING) {
+    state = S.POWER; power = 0; powerDir = 1;
+    showEl('power-wrap','flex'); setHint('Release to throw'); setSL('Charging');
+  }
+  // Don't steal clicks meant for UI buttons (tap-in, plane selector)
+  if (state === S.LANDED && !e.target.closest('#shot-sel') && !e.target.closest('#plane-sel')) enterAiming();
+});
+
+window.addEventListener('mouseup', e => {
+  if (e.button !== 0) return;
+  if (state === S.POWER) launchPlane();
+});
+
+window.addEventListener('keydown', e => {
+  const k = e.key;
+  if (k === 'r' || k === 'R') { resetHole(); return; }
+  if (k === '1') { selectPlane(0); return; }
+  if (k === '2') { selectPlane(1); return; }
+  if (k === '3') { selectPlane(2); return; }
+  if (k === 'Tab') { e.preventDefault();
+    const sc = document.getElementById('scoretable');
+    sc.style.display = sc.style.display === 'none' ? 'block' : 'none';
+    return;
+  }
+  if (k === 'm' || k === 'M') { toggleCourseMap(); return; }
+  if (state === S.FLYBY)  { skipFlyby(); return; }
+  if (state === S.LANDED && (k === ' ' || k === 'Enter')) enterAiming();
+});
+
+window.addEventListener('contextmenu', e => e.preventDefault());
+
+// =============================================================================
+//  UI HELPERS
+// =============================================================================
+function showEl(id, d='block') { document.getElementById(id).style.display = d; }
+function hideEl(id)            { document.getElementById(id).style.display = 'none'; }
+function setHint(t)            { document.getElementById('hint').textContent = t; }
+function setSL(t)              { document.getElementById('state-lbl').textContent = t; }
+
+function aimDir(yaw, pitch) {
+  yaw   ??= aimYaw; pitch ??= aimPitch;
+  return new THREE.Vector3(
+    Math.sin(yaw) * Math.cos(pitch),
+    Math.sin(pitch),
+   -Math.cos(yaw) * Math.cos(pitch)
+  ).normalize();
+}
+
+// Compute the horizontal yaw angle from 'from' position toward the basket.
+// atan2(dx, -dz) matches our convention: yaw=0 → facing -Z, yaw=+PI/2 → facing +X.
+function yawToward(from, target) {
+  return Math.atan2(target.x - from.x, -(target.z - from.z));
+}
+
+function relStr(n, par) {
+  const r = n - par;
+  return r < 0 ? String(r) : r === 0 ? 'E' : '+'+r;
+}
+function relCls(n, par) {
+  const r = n - par;
+  return r < 0 ? 'rel-under' : r === 0 ? 'rel-par' : 'rel-over';
+}
+function scoreGrade(n, par) {
+  const diff = n - par;
+  if (n === 1)     return { g:'HOLE IN ONE!', e:'🏆' };
+  if (diff <= -3)  return { g:'ALBATROSS',    e:'🦅' };
+  if (diff === -2) return { g:'EAGLE',        e:'🦅' };
+  if (diff === -1) return { g:'BIRDIE',       e:'🐦' };
+  if (diff ===  0) return { g:'PAR',          e:'🟢' };
+  if (diff ===  1) return { g:'BOGEY',        e:'😬' };
+  if (diff ===  2) return { g:'DOUBLE BOGEY', e:'😅' };
+  if (diff ===  3) return { g:'TRIPLE BOGEY', e:'💀' };
+  return { g:`+${diff} OVER`, e:'📝' };
+}
+function roundGrade(totStrokes, totPar) {
+  const diff = totStrokes - totPar;
+  if (diff <= -5)  return { g:'LEGENDARY!',  e:'🏆' };
+  if (diff <= -3)  return { g:'OUTSTANDING', e:'🦅' };
+  if (diff <= -1)  return { g:'UNDER PAR',   e:'🐦' };
+  if (diff ===  0) return { g:'EVEN PAR',    e:'🟢' };
+  if (diff <=  2)  return { g:'OVER PAR',    e:'😬' };
+  return { g:'KEEP PRACTISING', e:'💀' };
+}
+
+function updateDistHUD(from) {
+  const bp = currentDef.basketPos;
+  const d = Math.hypot(from.x - bp.x, from.z - bp.z); // horizontal only
+  document.getElementById('hc-dist').textContent = `${ftExact(d)} ft to pin`;
+}
+
+function updateRelHUD() {
+  const el = document.getElementById('hc-rel');
+  if (strokes === 0) { el.textContent='–'; el.className='rel'; return; }
+  el.textContent = relStr(strokes, currentDef.par);
+  el.className   = 'rel ' + relCls(strokes, currentDef.par);
+}
+
+// Build the scorecard table rows from HOLE_DEFS (called once at boot)
+function buildScorecardRows() {
+  const tbody = document.getElementById('sc-tbody');
+  tbody.innerHTML = '';
+  HOLE_DEFS.forEach((def, i) => {
+    const tr = document.createElement('tr');
+    tr.id = 'str-' + i;
+    tr.className = 'st-pend';
+    tr.innerHTML = `<td>${def.idx+1}</td><td>${def.par}</td><td>${def.distFt}'</td>`
+      + `<td id="stsc-${i}">–</td><td id="strl-${i}">–</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// Persistent scorecard table – call after any score update
+function updateScoreTable() {
+  let totS = 0, totP = 0;
+  HOLE_DEFS.forEach((def, i) => {
+    const sc = holeScores[i];
+    const row = document.getElementById('str-'+i);
+    const scEl = document.getElementById('stsc-'+i);
+    const rlEl = document.getElementById('strl-'+i);
+    if (sc !== null) {
+      scEl.textContent = sc;
+      rlEl.textContent = relStr(sc, def.par);
+      rlEl.className   = relCls(sc, def.par);
+      row.className    = 'st-done';
+      totS += sc; totP += def.par;
+    } else if (i === currentHoleIdx) {
+      scEl.textContent='–'; rlEl.textContent='–'; rlEl.className='';
+      row.className = 'st-active';
+    } else {
+      scEl.textContent='–'; rlEl.textContent='–'; rlEl.className='';
+      row.className = 'st-pend';
+    }
+  });
+  const totSc = holeScores.filter(s=>s!==null).reduce((a,b)=>a+b,0);
+  if (totSc > 0) {
+    document.getElementById('st-tot').textContent = totSc;
+    document.getElementById('st-trl').textContent = relStr(totSc, totP);
+    document.getElementById('st-trl').className   = relCls(totSc, totP);
+  } else {
+    document.getElementById('st-tot').textContent='–';
+    document.getElementById('st-trl').textContent='–';
+  }
+}
+
+function updateScoreTableHighlight() {
+  // Just refresh row highlight without changing scores
+  HOLE_DEFS.forEach((_, i) => {
+    document.getElementById('str-'+i).className =
+      holeScores[i]!==null ? 'st-done' : i===currentHoleIdx ? 'st-active' : 'st-pend';
+  });
+}
+
+let _flashTimer = null;
+function flash(msg) {
+  const el = document.getElementById('flash');
+  el.textContent = msg; el.style.display='block';
+  clearTimeout(_flashTimer);
+  _flashTimer = setTimeout(()=>{ el.style.display='none'; }, 2800);
+}
+
+function updateFlybyCard(def) {
+  document.getElementById('fb-name').textContent =
+    `Hole ${def.idx+1} · ${def.name}`;
+  document.getElementById('fb-stat').textContent =
+    `Par ${def.par}  ·  ${def.distFt}'  ·  Basket +${ftExact(def.basketPos.y)} ft`;
+  document.getElementById('fb-line').textContent =
+    ['FIRST HOLE','SECOND HOLE','THIRD HOLE','FOURTH HOLE','FIFTH HOLE','SIXTH HOLE','SEVENTH HOLE','EIGHTH HOLE','NINTH HOLE'][def.idx] ?? 'FINAL HOLE';
+}
+
+// =============================================================================
+//  PROCEDURAL FLYBY SPLINES
+//  Generates camera tour from hole definition – no hardcoded per-hole splines.
+// =============================================================================
+function buildFlyby(def) {
+  const bp  = def.basketPos;
+  const pts = def.fairwayPts;
+
+  // Camera path: starts high over tee, threads along fairway, orbits basket, returns
+  const camPts = [
+    new THREE.Vector3(10, 22, 15),
+    new THREE.Vector3( 0,  6, 13),
+  ];
+  // Sweep through interior fairway waypoints
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [fx,fz] = pts[i];
+    camPts.push(new THREE.Vector3(fx - 5, 5 + i*2.5, fz + 10));
+    camPts.push(new THREE.Vector3(fx + 3, 4 + i*1.5, fz + 4));
+  }
+  // Orbit around basket
+  camPts.push(new THREE.Vector3(bp.x + 9, bp.y + 5, bp.z - 10));
+  camPts.push(new THREE.Vector3(bp.x + 2, bp.y + 10, bp.z - 18));
+  camPts.push(new THREE.Vector3(bp.x - 8, bp.y + 5, bp.z - 8));
+  // Return behind tee
+  camPts.push(new THREE.Vector3(6, 10, 12));
+
+  // Look-at path: early points look at first interior waypoint,
+  // basket-orbit points look at basket, final return looks back at tee area.
+  const lookPts = camPts.map((_, i) => {
+    if (i <= 1) {
+      // Over tee: look toward first interior waypoint
+      const [mx,mz] = pts[Math.min(1, pts.length-1)];
+      return new THREE.Vector3(mx, 1, mz - 8);
+    }
+    if (i >= camPts.length - 2) {
+      // Final return arc: look back at the tee marker
+      return new THREE.Vector3(0, 0.5, 2);
+    }
+    // Everything else looks at basket
+    return new THREE.Vector3(bp.x, bp.y, bp.z);
+  });
+
+  flybyDur        = Math.min(14, 6.5 + def.distM / 32);
+  flybyCamSpline  = new THREE.CatmullRomCurve3(camPts);
+  flybyLookSpline = new THREE.CatmullRomCurve3(lookPts);
+}
+
+// =============================================================================
+//  FLYBY
+// =============================================================================
+function startFlyby() {
+  state = S.FLYBY; flybyT = 0; flybySkipped = false;
+  buildFlyby(currentDef);
+  const card = document.getElementById('flyby-card');
+  const skip = document.getElementById('flyby-skip');
+  card.style.opacity='0'; skip.style.display='none'; skip.style.opacity='0';
+  hideEl('holecard'); hideEl('scoretable'); hideEl('xhair'); hideEl('xdot'); hideEl('aim-hud'); hideEl('wind-hud');
+  hideShotSel(); hideEl('plane-sel');
+  setHint(''); setSL('');
+  setTimeout(()=>{ card.style.opacity='1'; }, 400);
+  setTimeout(()=>{ skip.style.display='block'; skip.style.opacity='1'; }, 1400);
+}
+
+function skipFlyby() {
+  if (flybySkipped) return;
+  flybySkipped = true;
+  document.getElementById('flyby-card').style.opacity='0';
+  document.getElementById('flyby-skip').style.opacity='0';
+  setTimeout(finishFlyby, 360);
+}
+
+function finishFlyby() {
+  document.getElementById('flyby-card').style.opacity='0';
+  document.getElementById('flyby-skip').style.display='none';
+  enterAiming();
+}
+
+// =============================================================================
+//  AIMING STATE
+// =============================================================================
+function enterAiming() {
+  state = S.AIMING;
+  showEl('holecard'); showEl('scoretable'); showEl('xhair'); showEl('xdot'); showEl('aim-hud'); showEl('wind-hud');
+  showEl('plane-sel','flex'); hideEl('power-wrap'); hideShotSel();
+  setHint('1/2/3 = plane type  ·  Mouse to aim (360°)  ·  Hold click to charge  ·  Release to throw');
+  setSL('Aiming');
+  document.getElementById('hc-num').textContent = strokes;
+  updateDistHUD(throwOrigin);
+  updateRelHUD();
+  updateScoreTable();
+  planePos.copy(throwOrigin); planeVel.set(0,0,0);
+  camAngle = aimYaw;
+}
+
+// =============================================================================
+//  LAUNCH
+//  TODO [AI-PLAYERS] Pass overrides = {yaw,pitch,pwr} from a bot controller
+// =============================================================================
+function launchPlane(overrides) {
+  const yaw   = overrides?.yaw   ?? aimYaw;
+  const pitch = overrides?.pitch ?? aimPitch;
+  const pwr   = overrides?.pwr   ?? power;
+  state = S.FLYING; strokes++;
+  document.getElementById('hc-num').textContent = strokes;
+  updateRelHUD();
+  hideEl('power-wrap'); hideEl('xhair'); hideEl('xdot'); hideEl('aim-hud'); hideEl('plane-sel'); showEl('wind-hud');
+  setHint(''); setSL('In flight');
+  planePos.copy(throwOrigin); planePos.y += 0.28;
+  const spd = activePlane.speedMin + pwr * (activePlane.speedMax - activePlane.speedMin);
+  planeVel.copy(aimDir(yaw, pitch)).multiplyScalar(spd);
+  trailCount = 0; trailGeom.setDrawRange(0, 0);
+}
+
+// =============================================================================
+//  RESET CURRENT HOLE
+// =============================================================================
+function resetHole() {
+  if (gameMode==='vsai') resetAI();
+  strokes = 0; aimPitch = 0.22; power = 0; powerDir = 1; treeHitCD = 0;
+  selectPlane(0);
+  throwOrigin.set(0, terrainHeight(0,0)+0.35, 0);
+  aimYaw = yawToward(throwOrigin, currentDef.basketPos);
+  planePos.copy(throwOrigin); planeVel.set(0,0,0);
+  trailCount = 0; trailGeom.setDrawRange(0,0);
+  document.getElementById('hc-num').textContent = '0';
+  document.getElementById('hc-rel').textContent = '–';
+  document.getElementById('hc-rel').className   = 'rel';
+  hideEl('complete'); hideEl('flash');
+  camAngle = aimYaw;
+  startFlyby();
+}
+window.resetHole = resetHole;
+
+// =============================================================================
+//  NEXT HOLE
+// =============================================================================
+function nextHole() {
+  hideEl('complete'); hideTurnBanner();
+  if (gameMode==='vsai') resetAI();
+  selectPlane(0); // reset to Driver for new hole
+  const next = currentHoleIdx + 1;
+  if (next >= HOLE_DEFS.length) {
+    showFinalScorecard(); return;
+  }
+  strokes = 0; aimPitch = 0.22; power = 0; powerDir = 1;
+  treeHitCD = 0; trailCount = 0; trailGeom.setDrawRange(0,0);
+  loadHole(next);
+  throwOrigin.set(0, terrainHeight(0,0)+0.35, 0);
+  aimYaw = yawToward(throwOrigin, currentDef.basketPos);
+  planePos.copy(throwOrigin); planeVel.set(0,0,0);
+  camAngle = aimYaw;
+  startFlyby();
+}
+window.nextHole = nextHole;
+
+// =============================================================================
+//  NEW ROUND
+// =============================================================================
+function startNewRound() {
+  holeScores.fill(null);
+  aiScores.fill(null);
+  if (gameMode==='vsai') resetAI();
+  const sub = document.getElementById('fin-subtitle');
+  if(sub) sub.textContent = gameMode==='vsai' ? 'Player vs CPU · Stroke Play · Front 9' : 'Planegolf · Front 9';
+  selectPlane(0);
+  strokes=0; aimPitch=0.22; power=0; powerDir=1; treeHitCD=0;
+  trailCount=0; trailGeom.setDrawRange(0,0);
+  hideEl('final-sc'); hideEl('complete'); hideEl('flash');
+  updateScoreTable();
+  loadHole(0);
+  throwOrigin.set(0, terrainHeight(0,0)+0.35, 0);
+  aimYaw = yawToward(throwOrigin, currentDef.basketPos);
+  planePos.copy(throwOrigin); planeVel.set(0,0,0);
+  camAngle = aimYaw;
+  startFlyby();
+}
+window.startNewRound = startNewRound;
+
+// =============================================================================
+//  TAP-IN
+// =============================================================================
+// Shot selection helpers for tap-in range
+function hideShotSel() { hideEl('shot-sel'); }
+
+function doTapIn() {
+  hideShotSel();
+  strokes++;
+  document.getElementById('hc-num').textContent = strokes;
+  updateRelHUD();
+  throwOrigin.copy(currentDef.basketPos); // ensure throwOrigin is at basket for decideTurn
+  onHoleComplete();
+}
+window.doTapIn = doTapIn;
+
+// Normal putter throw – standard power bar
+function shotPutt() {
+  hideShotSel();
+  selectPlane(2); // putter
+  enterAiming();
+}
+window.shotPutt = shotPutt;
+
+// Push putt – flat low release: fixed low pitch, moderate power, straight
+function shotPushPutt() {
+  hideShotSel();
+  selectPlane(2); // putter disc
+  // Override: low flat pitch (5°), medium-high power → controlled short flight
+  const savedPitch = aimPitch;
+  aimPitch = 0.09; // ~5° – flat release hugs the line
+  state = S.POWER; power = 0.55; powerDir = 1; // start mid-charged
+  showEl('power-wrap','flex');
+  showEl('xhair'); showEl('xdot'); showEl('aim-hud');
+  setHint('Push Putt – flat & straight  ·  Release to throw');
+  setSL('Push Putt');
+}
+window.shotPushPutt = shotPushPutt;
+
+// =============================================================================
+//  HOLE COMPLETE
+// =============================================================================
+function onHoleComplete() {
+  planePos.copy(currentDef.basketPos); planeVel.set(0,0,0);
+  holeScores[currentHoleIdx] = strokes;
+  if (gameMode === 'vsai' && !aiHoledOut) {
+    playerHoledOut = true;
+    hideEl('shot-sel'); hideEl('plane-sel'); hideEl('power-wrap');
+    hideEl('xhair'); hideEl('xdot'); hideEl('aim-hud');
+    hideTurnBanner();
+    setTurnBanner('✈ YOU HOLED OUT!');
+    scheduleAIThrow(1.8);
+    return;
+  }
+  showHoleCompleteOverlay();
+}
+
+function showHoleCompleteOverlay() {
+  state = S.COMPLETE; setSL(''); setHint('');
+  hideTurnBanner();
+  aiPlane.visible = false;
+  const sg = scoreGrade(strokes, currentDef.par);
+  const isLast = currentHoleIdx === HOLE_DEFS.length - 1;
+  document.getElementById('cpl-grade').textContent = `${sg.e} ${sg.g}`;
+  document.getElementById('cpl-grade').className   = 'cpl-grade ' + relCls(strokes, currentDef.par);
+  document.getElementById('cpl-rel').textContent   = relStr(strokes, currentDef.par) + (relStr(strokes,currentDef.par)==='E' ? '  EVEN PAR' : (strokes<currentDef.par?' UNDER PAR':' OVER PAR'));
+  document.getElementById('cpl-det').textContent   = `Hole ${currentHoleIdx+1} · ${currentDef.name} · Par ${currentDef.par} · ${currentDef.distFt}' · ${strokes} stroke${strokes!==1?'s':''}`;
+  document.getElementById('btn-next').textContent  = isLast ? 'Finish Round →' : 'Next Hole →';
+  if (gameMode === 'vsai') {
+    const aiSc = aiScores[currentHoleIdx] ?? aiStrokes;
+    const margin = strokes - aiSc;
+    document.getElementById('cpl-ai-row').style.display = 'flex';
+    document.getElementById('cpl-ai-score').textContent = `🤖 CPU: ${aiSc} stroke${aiSc!==1?'s':''}`;
+    const dEl = document.getElementById('cpl-ai-delta');
+    dEl.textContent = margin===0 ? '🤝 Tied this hole' : (margin<0 ? `🏆 You won by ${-margin} stroke${-margin!==1?'s':''}` : `🤖 CPU won by ${margin} stroke${margin!==1?'s':''} `);
+    dEl.style.color = margin<0?'#40e8d8':margin>0?'#ff8058':'rgba(200,215,255,.65)';
+  } else {
+    document.getElementById('cpl-ai-row').style.display = 'none';
+  }
+  showEl('complete');
+  updateScoreTable();
+}
+
+// =============================================================================
+//  FINAL SCORECARD
+// =============================================================================
+function showFinalScorecard() {
+  hideEl('complete');
+  if (gameMode === 'vsai') aiPlayRound(); // AI plays all holes at once
+  const isVsAI = gameMode === 'vsai';
+  // Rebuild table header for vs-AI mode
+  const thead = document.querySelector('#final-tbl thead tr');
+  if (isVsAI) {
+    thead.innerHTML = '<th>HOLE</th><th>NAME</th><th>PAR</th><th>DIST</th>'
+      + '<th>YOU</th><th>+/-</th><th>CPU</th><th>+/-</th><th>ΔSTROKES</th>';
+  } else {
+    thead.innerHTML = '<th>HOLE</th><th>NAME</th><th>PAR</th><th>DIST</th><th>SCR</th><th>+/-</th><th>GRADE</th>';
+  }
+  const tbody = document.getElementById('final-tbody');
+  tbody.innerHTML = '';
+  let totS=0, totP=0, totAI=0;
+  HOLE_DEFS.forEach((def, i) => {
+    const sc  = holeScores[i] ?? '?';
+    const ai  = aiScores[i]   ?? '?';
+    const sg  = typeof sc==='number' ? scoreGrade(sc, def.par) : {g:'-',e:''};
+    const tr  = document.createElement('tr');
+    tr.className = 'done-row';
+    if (isVsAI) {
+      const delta = typeof sc==='number' && typeof ai==='number' ? sc - ai : '';
+      const dCls  = delta==='' ? '' : delta<0 ? 'rel-under' : delta>0 ? 'rel-over' : 'rel-par';
+      const dTxt  = delta==='' ? '–' : (delta>0?'+':'')+delta;
+      tr.innerHTML = `<td>${def.idx+1}</td><td>${def.name}</td><td>${def.par}</td><td>${def.distFt}'</td>`
+        + `<td>${sc}</td><td class="${typeof sc==='number'?relCls(sc,def.par):''}">${typeof sc==='number'?relStr(sc,def.par):'-'}</td>`
+        + `<td>${ai}</td><td class="${typeof ai==='number'?relCls(ai,def.par):''}">${typeof ai==='number'?relStr(ai,def.par):'-'}</td>`
+        + `<td class="${dCls}">${dTxt}</td>`;
+    } else {
+      tr.innerHTML = `<td>${def.idx+1}</td><td>${def.name}</td><td>${def.par}</td><td>${def.distFt}'</td><td>${sc}</td>`
+        + `<td class="${typeof sc==='number'?relCls(sc,def.par):''}">${typeof sc==='number'?relStr(sc,def.par):'-'}</td>`
+        + `<td>${sg.e} ${sg.g}</td>`;
+    }
+    tbody.appendChild(tr);
+    if (typeof sc==='number') { totS+=sc; totP+=def.par; }
+    if (typeof ai==='number') { totAI+=ai; }
+  });
+  document.getElementById('fin-tot').textContent   = totS;
+  document.getElementById('fin-rel').textContent   = relStr(totS,totP);
+  document.getElementById('fin-rel').className     = relCls(totS,totP);
+  const rg = roundGrade(totS, totP);
+  if (isVsAI) {
+    const margin = totS - totAI;
+    const winner = margin < 0 ? '🏆 YOU WIN!' : margin > 0 ? '🤖 CPU WINS' : '🤝 TIE';
+    const mStr   = Math.abs(margin) + (Math.abs(margin)===1?' stroke':' strokes');
+    document.getElementById('fin-rndgrade').textContent = winner;
+    document.getElementById('fin-rndgrade').className   = 'rnd-grade '+(margin<0?'rel-under':margin>0?'rel-over':'rel-par');
+    document.getElementById('fin-rndrel').textContent   = margin===0 ? 'Dead heat — both tied!' : (margin<0?'You beat CPU by ':`CPU beat you by `)+mStr;
+    document.getElementById('fin-grade-lbl').textContent = `CPU: ${totAI}`;
+  } else {
+    document.getElementById('fin-rndgrade').textContent = `${rg.e} ${rg.g}`;
+    document.getElementById('fin-rndgrade').className   = 'rnd-grade '+relCls(totS,totP);
+    document.getElementById('fin-rndrel').textContent   = `${totS} strokes · ${relStr(totS,totP)} (par ${totP})`;
+    document.getElementById('fin-grade-lbl').textContent = '';
+  }
+  showEl('final-sc');
+}
+
+// =============================================================================
+//  TICK: Flyby camera
+// =============================================================================
+function tickFlyby(dt) {
+  if (state !== S.FLYBY || !flybyCamSpline) return;
+  flybyT = Math.min(flybyT + dt/flybyDur, 1.0);
+  if (flybyT >= 1.0 && !flybySkipped) { skipFlyby(); return; }
+  const cp = flybyCamSpline.getPoint(flybyT);
+  const lp = flybyLookSpline.getPoint(flybyT);
+  cp.y = Math.max(cp.y, terrainHeight(cp.x, cp.z) + 1.4);
+  camera.position.copy(cp); camera.lookAt(lp);
+}
+
+// =============================================================================
+//  TICK: Power bar
+// =============================================================================
+function tickPower(dt) {
+  if (state !== S.POWER) return;
+  power += powerDir * dt * 0.82;
+  if (power >= 1) { power=1; powerDir=-1; }
+  if (power <= 0) { power=0; powerDir= 1; }
+  document.getElementById('power-fill').style.height = (power*100)+'%';
+}
+
+// =============================================================================
+//  TICK: Flight physics + collision
+// =============================================================================
+function tickFlight(dt) {
+  if (state !== S.FLYING) return;
+
+  // Apply wind force to velocity (horizontal push only)
+  planeVel.addScaledVector(WIND_VEC, dt * 0.5);
+
+  planeVel.y -= GRAVITY * dt;
+  planeVel.y += activePlane.lift * Math.hypot(planeVel.x, planeVel.z) * dt;
+  planeVel.multiplyScalar(Math.exp(-activePlane.drag * dt));
+  planePos.addScaledVector(planeVel, dt);
+
+  const spd = planeVel.length();
+  if (spd > 0.3) {
+    airplane.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,-1), planeVel.clone().normalize());
+    ridge.quaternion.copy(airplane.quaternion);
+  }
+  airplane.position.copy(planePos); ridge.position.copy(planePos);
+
+  // Trail
+  if (trailCount < TRAIL_MAX) {
+    trailBuf[trailCount*3]   = planePos.x;
+    trailBuf[trailCount*3+1] = planePos.y;
+    trailBuf[trailCount*3+2] = planePos.z;
+    trailCount++; trailGeom.attributes.position.needsUpdate=true;
+    trailGeom.setDrawRange(0, trailCount);
+  }
+
+  updateDistHUD(planePos);
+  if (treeHitCD > 0) treeHitCD -= dt;
+
+  // ── Tree collision ────────────────────────────────────────────────────────
+  for (const tc of treeColliders) {
+    const dx = planePos.x - tc.x, dz = planePos.z - tc.z;
+    const hd = Math.hypot(dx, dz);
+    if (hd < tc.r && planePos.y < tc.h) {
+      const nx = dx/(hd+1e-5), nz = dz/(hd+1e-5);
+      const dot = planeVel.x*nx + planeVel.z*nz;
+      if (dot < 0) { // moving INTO tree
+        // Reflect horizontal component, absorb ~45% energy
+        planeVel.x -= 2.0 * dot * nx;
+        planeVel.z -= 2.0 * dot * nz;
+        planeVel.y  = Math.max(planeVel.y, 1.8); // slight upkick from branches
+        planeVel.multiplyScalar(0.55);
+        // Push plane outside the cylinder to prevent sticking
+        planePos.x = tc.x + nx * (tc.r + 0.12);
+        planePos.z = tc.z + nz * (tc.r + 0.12);
+        const hitMsg = tc.isPole ? '🪧 POLE HIT!  Deflected!' : '🌲 TREE HIT!  Deflected!';
+        if (treeHitCD <= 0) { flash(hitMsg); treeHitCD = 1.2; }
+      }
+      break; // only one tree per frame
+    }
+  }
+
+  // ── Basket collision ──────────────────────────────────────────────────────
+  if (planePos.distanceTo(currentDef.basketPos) < currentDef.basketR + 0.22) {
+    onHoleComplete(); return;
+  }
+
+  // ── Terrain collision ─────────────────────────────────────────────────────
+  const groundY = terrainHeight(planePos.x, planePos.z);
+  if (planePos.y <= groundY + 0.07) {
+    planePos.y = groundY + 0.07;
+    planeVel.set(0,0,0);
+    airplane.position.copy(planePos); ridge.position.copy(planePos);
+
+    // ── Tap-in rule: within 5 ft (1.524 m) of basket → show tap-in button
+    const TAP_IN_M = 5 / 3.28084;  // 5 ft ≈ 1.524 m
+    const bpH = currentDef.basketPos;
+    const horizDistToBasket = Math.hypot(planePos.x - bpH.x, planePos.z - bpH.z);
+    if (horizDistToBasket <= TAP_IN_M) {
+      throwOrigin.copy(planePos); throwOrigin.y = groundY + 0.35;
+      aimYaw = yawToward(planePos, currentDef.basketPos);
+      camAngle = aimYaw;
+      selectPlane(2); // auto-switch to Putter inside tap-in range
+      state = S.LANDED;
+      setSL('Tap-in range');
+      setHint('📍 Inside 5 ft  ·  Tap In to finish  ·  or use Putter [3] for another throw');
+      showEl('holecard'); showEl('scoretable'); showEl('wind-hud');
+      showEl('plane-sel','flex');
+      updateDistHUD(planePos);
+      return;
+    }
+
+    // ── Water hazard: +1 stroke, re-throw from current lie (throwOrigin not yet updated)
+    if (inWater(planePos.x, planePos.z)) {
+      strokes++;
+      document.getElementById('hc-num').textContent = strokes;
+      updateRelHUD();
+      // throwOrigin intentionally NOT updated – they re-throw from previous lie
+      aimYaw = yawToward(throwOrigin, currentDef.basketPos);
+      camAngle = aimYaw;
+      state = S.LANDED; setSL('Water hazard');
+      flash('💧 WATER HAZARD!  +1 stroke  ·  Re-throw from previous lie');
+      setHint('Click or Enter to re-throw  ·  R to reset');
+      showEl('holecard'); showEl('scoretable'); showEl('wind-hud'); showEl('plane-sel','flex');
+      updateDistHUD(throwOrigin);
+      return;
+    }
+
+    // Golf rule: play from your lie – update throw origin to landing spot
+    throwOrigin.copy(planePos); throwOrigin.y = groundY + 0.35;
+
+    // ── Sand bunker: +1 stroke, play from lie
+    if (inBunker(planePos.x, planePos.z)) {
+      strokes++;
+      document.getElementById('hc-num').textContent = strokes;
+      updateRelHUD();
+      aimYaw = yawToward(throwOrigin, currentDef.basketPos);
+      camAngle = aimYaw;
+      state = S.LANDED; setSL('Sand bunker');
+      flash('⛳ SAND BUNKER!  +1 stroke  ·  Play from lie');
+      setHint('Click or Enter to aim  ·  R to reset');
+      showEl('holecard'); showEl('scoretable'); showEl('wind-hud'); showEl('plane-sel','flex');
+      updateDistHUD(throwOrigin);
+      return;
+    }
+
+    // Re-orient aim and camera toward basket from the new lie
+    aimYaw = yawToward(throwOrigin, currentDef.basketPos);
+    camAngle = aimYaw;
+    updateDistHUD(planePos);
+    if (strokes >= currentDef.par * 3) { onHoleComplete(); return; }
+    if (gameMode === 'vsai') { decideTurn(); }
+    else {
+      state = S.LANDED; setSL('Landed');
+      setHint('Click or Enter to aim  ·  R to reset  ·  M = course map');
+      showEl('holecard'); showEl('scoretable'); showEl('wind-hud'); showEl('plane-sel','flex');
+    }
+    return;
+  }
+
+  // ── Out of bounds (polygon OB – adjacent hole = OB) ──────────────────────
+  if (!inHolePolygon(planePos.x, planePos.z) || planePos.y > 110) {
+    strokes++;
+    document.getElementById('hc-num').textContent = strokes;
+    updateRelHUD();
+    flash('OUT OF BOUNDS  ·  +1 PENALTY  ·  RE-THROW');
+    planePos.copy(throwOrigin); planeVel.set(0,0,0);
+    airplane.position.copy(planePos); ridge.position.copy(planePos);
+    // Re-orient aim and camera toward basket from the re-throw spot
+    aimYaw = yawToward(throwOrigin, currentDef.basketPos);
+    camAngle = aimYaw;
+    state = S.LANDED; setSL('OOB – Re-throw');
+    setHint('Click or Enter to re-throw  ·  R to reset hole');
+    updateDistHUD(throwOrigin);
+  }
+}
+
+// =============================================================================
+//  TICK: Idle plane hover at throw origin
+// =============================================================================
+function tickIdle(t) {
+  if (state !== S.AIMING && state !== S.POWER) return;
+  const base = throwOrigin.clone();
+  base.y += 0.24 + Math.sin(t * 1.85) * 0.055;
+  airplane.position.copy(base); ridge.position.copy(base);
+  const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,-1), aimDir());
+  airplane.quaternion.copy(q); ridge.quaternion.copy(q);
+}
+
+// =============================================================================
+//  TICK: Aim arrow
+// =============================================================================
+function tickArrow() {
+  const vis = state === S.AIMING || state === S.POWER;
+  aimArrow.visible = vis;
+  if (!vis) return;
+  const d   = aimDir();
+  const len = state === S.POWER ? 0.5 + power * 6.2 : 3.5;
+  aimArrow.position.copy(airplane.position);
+  aimArrow.setDirection(d);
+  aimArrow.setLength(len, Math.min(0.50, len*0.13), Math.min(0.30, len*0.09));
+}
+
+// =============================================================================
+//  TICK: Camera  (all states except FLYBY which is handled by tickFlyby)
+// =============================================================================
+function tickCamera(dt) {
+  if (state === S.FLYBY) return;
+  const OR = 5.5, OH = 2.3;
+
+  if (state === S.AIMING || state === S.POWER) {
+    // Orbit camera behind aim direction, full 360°.
+    // Use short-path angle interpolation to avoid wrap-around spinning.
+    let delta = aimYaw - camAngle;
+    delta -= Math.round(delta / (Math.PI*2)) * (Math.PI*2); // normalise to [-π, π]
+    camAngle += delta * Math.min(1.0, 6.0 * dt);
+
+    const tgt = new THREE.Vector3(
+      throwOrigin.x - Math.sin(camAngle) * OR,
+      throwOrigin.y + OH,
+      throwOrigin.z + Math.cos(camAngle) * OR
+    );
+    camera.position.lerp(tgt, Math.min(1.0, 8.0*dt));
+    const look = aimDir().multiplyScalar(14).add(throwOrigin);
+    look.y = Math.max(look.y, terrainHeight(look.x, look.z) + 0.7);
+    camera.lookAt(look);
+
+  } else if (state === S.FLYING) {
+    const spd  = planeVel.length();
+    const back = spd > 0.4 ? planeVel.clone().normalize().negate() : new THREE.Vector3(0,0,1);
+    const tgt  = planePos.clone().addScaledVector(back, 4.5).add(new THREE.Vector3(0,1.7,0));
+    camera.position.lerp(tgt, 1.0 - Math.exp(-7.5*dt));
+    camera.lookAt(planePos.x, planePos.y+0.2, planePos.z);
+
+  } else if (state === S_AI_FLYING) {
+    const spd  = aiVel.length();
+    const back = spd > 0.4 ? aiVel.clone().normalize().negate() : new THREE.Vector3(0,0,1);
+    const tgt  = aiPos.clone().addScaledVector(back, 4.5).add(new THREE.Vector3(0,1.7,0));
+    camera.position.lerp(tgt, 1.0 - Math.exp(-7.5*dt));
+    camera.lookAt(aiPos.x, aiPos.y+0.2, aiPos.z);
+
+  } else if (state === S_AI_PREP) {
+    // Orbit the AI's current lie during prep pause
+    camAngle += 0.22 * dt;
+    camera.position.set(
+      aiThrowOrigin.x + Math.sin(camAngle)*5.5,
+      aiThrowOrigin.y + 2.5,
+      aiThrowOrigin.z + Math.cos(camAngle)*5.5
+    );
+    camera.lookAt(aiThrowOrigin);
+
+  } else { // LANDED / COMPLETE / FINAL
+    camAngle += 0.26 * dt;
+    camera.position.set(
+      planePos.x + Math.sin(camAngle) * 4.5,
+      planePos.y + 2.5,
+      planePos.z + Math.cos(camAngle) * 4.5
+    );
+    camera.lookAt(planePos);
+  }
+}
+
+// =============================================================================
+//  TICK: Basket animation
+// =============================================================================
+function tickBasket(t) {
+  if (!currentAimRing) return;
+  const p = 1 + 0.05 * Math.sin(t * 2.2);
+  if (currentBasketMesh) currentBasketMesh.scale.setScalar(p);
+  if (currentBasketFill) currentBasketFill.scale.setScalar(p);
+  currentAimRing.rotation.x = t * 0.60;
+  currentAimRing.rotation.y = t * 0.38;
+}
+
+// =============================================================================
+//  TICK: Aim HUD readout
+// =============================================================================
+function tickHUD() {
+  if (state !== S.AIMING && state !== S.POWER) return;
+  document.getElementById('hud-yaw').textContent   = `YAW    ${(aimYaw  *180/Math.PI).toFixed(1)}°`;
+  document.getElementById('hud-pitch').textContent = `PITCH  ${(aimPitch*180/Math.PI).toFixed(1)}°`;
+}
+
+// =============================================================================
+//  TICK: Tap-in proximity — show shot-sel whenever within 10 ft of basket
+// =============================================================================
+const TAP_PROXIMITY_M = 10 / 3.28084; // 10 ft ≈ 3.048 m
+let _tapInVisible = false;
+
+function tickTapInProximity() {
+  // Only relevant while player is preparing / aiming (not during flight or overlays)
+  const active = state === S.AIMING || state === S.POWER || state === S.LANDED;
+  if (!active || !currentDef) {
+    if (_tapInVisible) { hideEl('shot-sel'); _tapInVisible = false; }
+    return;
+  }
+  const bp = currentDef.basketPos;
+  const hd = Math.hypot(throwOrigin.x - bp.x, throwOrigin.z - bp.z);
+  const inRange = hd <= TAP_PROXIMITY_M;
+  if (inRange && !_tapInVisible) {
+    showEl('shot-sel','flex');
+    _tapInVisible = true;
+  } else if (!inRange && _tapInVisible) {
+    hideEl('shot-sel');
+    _tapInVisible = false;
+  }
+}
+
+
+// =============================================================================
+//  WILDLIFE  –  birds, squirrels, rabbits, deer
+// =============================================================================
+const wildlifeAgents = [];   // { mesh/group, tick(t,dt) }
+
+// ── Low-poly builder helpers ────────────────────────────────────────────────
+function wBox(w,h,d,col){ return new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color:col})); }
+function wSph(r,col,seg=5){ return new THREE.Mesh(new THREE.SphereGeometry(r,seg,4),new THREE.MeshLambertMaterial({color:col})); }
+function wCyl(rt,rb,h,col,seg=5){ return new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),new THREE.MeshLambertMaterial({color:col})); }
+function wCone(r,h,col,seg=5){ return new THREE.Mesh(new THREE.ConeGeometry(r,h,seg),new THREE.MeshLambertMaterial({color:col})); }
+
+function addWild(grp){ scene.add(grp); dynObjs.push(grp); return grp; }
+
+// ── Bird flock ──────────────────────────────────────────────────────────────
+function spawnBirdFlock(cx, cy, cz, count) {
+  for(let i=0;i<count;i++){
+    const grp = new THREE.Group();
+    // Body
+    const body = wBox(0.28,0.07,0.45,0xd0c8b0); grp.add(body);
+    // Left wing
+    const wL = wBox(0.55,0.04,0.18,0xb8b0a0);
+    wL.position.set(-0.38,0,0.02); grp.add(wL);
+    // Right wing
+    const wR = wBox(0.55,0.04,0.18,0xb8b0a0);
+    wR.position.set(0.38,0,0.02); grp.add(wR);
+    // Head
+    const head = wSph(0.08,0x403828,4);
+    head.position.set(0,0.06,0.25); grp.add(head);
+
+    const off = i*(Math.PI*2/count);
+    const orbitR  = 6 + i*1.8 + Math.random()*3;
+    const orbitSp = 0.35 + Math.random()*0.18;
+    const flapSp  = 3.5  + Math.random()*2.5;
+    const flapAmp = 0.55 + Math.random()*0.30;
+    const bobAmp  = 0.45 + Math.random()*0.35;
+
+    addWild(grp);
+    wildlifeAgents.push({ grp, tick(t) {
+      const a = off + t * orbitSp;
+      grp.position.set(cx + Math.cos(a)*orbitR, cy + Math.sin(t*0.7+off)*bobAmp, cz + Math.sin(a)*orbitR);
+      grp.rotation.y = -a + Math.PI/2;
+      // Wing flap
+      wL.rotation.z =  Math.sin(t*flapSp)*flapAmp + 0.15;
+      wR.rotation.z = -Math.sin(t*flapSp)*flapAmp - 0.15;
+      // Scatter if plane is near
+      const distToPlane = Math.hypot(grp.position.x-planePos.x, grp.position.z-planePos.z);
+      if((state===S.FLYING||state===S_AI_FLYING) && distToPlane < 8) {
+        grp.position.y += 0.08;
+        wL.rotation.z += 0.5; wR.rotation.z -= 0.5;
+      }
+    }});
+  }
+}
+
+// ── Squirrel ──────────────────────────────────────────────────────────────
+function spawnSquirrel(wx, wz) {
+  const ty = terrainHeight(wx, wz);
+  const grp = new THREE.Group();
+  const body = wSph(0.14,0x8b5e3c,6); body.scale.set(1,1.2,1.4); grp.add(body);
+  const head = wSph(0.10,0x8b5e3c,5); head.position.set(0,0.14,0.16); grp.add(head);
+  const earL = wCone(0.035,0.08,0xb07840,4); earL.position.set(-0.06,0.22,0.16); grp.add(earL);
+  const earR = earL.clone(); earR.position.x=0.06; grp.add(earR);
+  // Tail – curved upward arc using rotated cone
+  const tail = wCone(0.07,0.45,0xa07840,5);
+  tail.rotation.x=-1.2; tail.position.set(0,0.20,-0.20); grp.add(tail);
+  const eye = wSph(0.025,0x111111,3); eye.position.set(0.05,0.17,0.24); grp.add(eye);
+
+  const homeX=wx, homeZ=wz;
+  let phase=Math.random()*Math.PI*2;
+  let roamX=wx, roamZ=wz, roamT=0, roamDur=2+Math.random()*3, roamNX=wx, roamNZ=wz;
+  grp.position.set(wx,ty+0.14,wz);
+
+  addWild(grp);
+  wildlifeAgents.push({ grp, tick(t,dt) {
+    phase+=dt;
+    roamT+=dt;
+    if(roamT>roamDur){
+      roamT=0; roamDur=1.5+Math.random()*3;
+      roamNX=homeX+(Math.random()-0.5)*5;
+      roamNZ=homeZ+(Math.random()-0.5)*5;
+    }
+    roamX+=(roamNX-roamX)*dt*1.8; roamZ+=(roamNZ-roamZ)*dt*1.8;
+    const ty2=terrainHeight(roamX,roamZ);
+    grp.position.set(roamX,ty2+0.14+Math.abs(Math.sin(phase*6))*0.08,roamZ);
+    grp.rotation.y=Math.atan2(roamNX-roamX,roamNZ-roamZ);
+    // Scatter from plane
+    if((state===S.FLYING||state===S_AI_FLYING) && planePos.distanceTo(grp.position)<5) { roamNX=homeX; roamNZ=homeZ; }
+  }});
+}
+
+// ── Rabbit ──────────────────────────────────────────────────────────────────
+function spawnRabbit(wx, wz) {
+  const ty = terrainHeight(wx, wz);
+  const grp = new THREE.Group();
+  const body = wSph(0.16,0xd4c8a0,6); body.scale.set(1,0.9,1.5); grp.add(body);
+  const head = wSph(0.11,0xd4c8a0,5); head.position.set(0,0.14,0.22); grp.add(head);
+  const earL = wCyl(0.025,0.025,0.25,0xd4c8a0,4); earL.position.set(-0.05,0.30,0.20); grp.add(earL);
+  const earR = earL.clone(); earR.position.x=0.05; grp.add(earR);
+  const nose = wSph(0.03,0xee9999,3); nose.position.set(0,0.12,0.31); grp.add(nose);
+  const eyeL = wSph(0.025,0x222222,3); eyeL.position.set(-0.05,0.17,0.30); grp.add(eyeL);
+  const eyeR = eyeL.clone(); eyeR.position.x=0.05; grp.add(eyeR);
+
+  const homeX=wx, homeZ=wz;
+  let hopT=0, hopDur=0.4, restT=0, restDur=1.5+Math.random()*2.5;
+  let hopping=false;
+  let tx=wx,tz=wz, nx=wx,nz=wz;
+  grp.position.set(wx,ty+0.14,wz);
+
+  addWild(grp);
+  wildlifeAgents.push({ grp, tick(t,dt) {
+    const fly = (state===S.FLYING||state===S_AI_FLYING) && Math.hypot(planePos.x-grp.position.x,planePos.z-grp.position.z)<8;
+    if(fly){ nx=homeX+(Math.random()-0.5)*8; nz=homeZ+(Math.random()-0.5)*8; hopping=true; hopT=0; }
+    if(hopping){
+      hopT+=dt;
+      tx+=(nx-tx)*dt*4; tz+=(nz-tz)*dt*4;
+      const g2=terrainHeight(tx,tz);
+      grp.position.set(tx,g2+0.14+Math.sin(hopT/hopDur*Math.PI)*0.35,tz);
+      grp.rotation.y=Math.atan2(nx-tx,nz-tz);
+      if(hopT>hopDur){ hopping=false; restT=0; restDur=0.8+Math.random()*2.5;
+        nx=homeX+(Math.random()-0.5)*6; nz=homeZ+(Math.random()-0.5)*6; }
+    } else {
+      restT+=dt;
+      // ear twitch
+      earL.rotation.z=Math.sin(t*1.2)*0.12; earR.rotation.z=-Math.sin(t*1.2)*0.12;
+      if(restT>restDur){ hopping=true; hopT=0; hopDur=0.35+Math.random()*0.15; }
+    }
+  }});
+}
+
+// ── Deer ─────────────────────────────────────────────────────────────────────
+function spawnDeer(wx, wz) {
+  const ty = terrainHeight(wx, wz);
+  const grp = new THREE.Group();
+  // Body
+  const body = wBox(0.32,0.36,0.80,0xa07040); grp.add(body);
+  // Neck
+  const neck = wBox(0.14,0.32,0.14,0xa07040); neck.position.set(0,0.32,0.36); grp.add(neck);
+  // Head
+  const head = wBox(0.18,0.18,0.28,0xa07040); head.position.set(0,0.54,0.44); grp.add(head);
+  // Snout
+  const snout = wBox(0.10,0.10,0.16,0x8a6030); snout.position.set(0,0.50,0.58); grp.add(snout);
+  // Ears
+  const eL=wBox(0.06,0.14,0.04,0xa07040); eL.position.set(-0.13,0.66,0.44); grp.add(eL);
+  const eR=eL.clone(); eR.position.x=0.13; grp.add(eR);
+  // Antlers (optional – half chance)
+  if(Math.random()>0.5){
+    const antL=wCyl(0.018,0.018,0.40,0x7a5020,3); antL.position.set(-0.10,0.80,0.44); antL.rotation.z=0.35; grp.add(antL);
+    const antR=antL.clone(); antR.position.x=0.10; antR.rotation.z=-0.35; grp.add(antR);
+  }
+  // Legs
+  [[-0.11,0.28],[-0.11,-0.28],[0.11,0.28],[0.11,-0.28]].forEach(([lx,lz])=>{
+    const leg=wBox(0.07,0.40,0.07,0x906030); leg.position.set(lx,-0.38,lz); grp.add(leg);
+  });
+  // Eyes
+  const eyeL=wSph(0.04,0x111111,3); eyeL.position.set(-0.08,0.55,0.56); grp.add(eyeL);
+  const eyeR=eyeL.clone(); eyeR.position.x=0.08; grp.add(eyeR);
+
+  const homeX=wx, homeZ=wz;
+  let walkAngle=Math.random()*Math.PI*2;
+  let walkT=0, walkDur=4+Math.random()*5;
+  let stopped=true, stopT=0, stopDur=3+Math.random()*5;
+  let tx=wx, tz=wz;
+  grp.position.set(wx,ty+0.60,wz);
+
+  addWild(grp);
+  wildlifeAgents.push({ grp, tick(t,dt) {
+    const flyNear=(state===S.FLYING||state===S_AI_FLYING) && Math.hypot(planePos.x-grp.position.x,planePos.z-grp.position.z)<14;
+    if(flyNear && stopped){ stopped=false; walkAngle=Math.atan2(homeX-tx,homeZ-tz); walkT=0; walkDur=5; }
+
+    if(!stopped){
+      walkT+=dt;
+      const spd=1.6;
+      tx+=Math.sin(walkAngle)*spd*dt; tz+=Math.cos(walkAngle)*spd*dt;
+      const g2=terrainHeight(tx,tz);
+      grp.position.set(tx,g2+0.60,tz);
+      grp.rotation.y=walkAngle;
+      // Leg sway
+      grp.children.filter((_,i)=>i>=9&&i<=12).forEach((l,i)=>{
+        l.rotation.x=Math.sin(t*3.5+(i*Math.PI))*0.35;
+      });
+      // Head bob
+      head.position.y=0.54+Math.sin(t*3.5)*0.04;
+      if(walkT>walkDur){ stopped=true; stopT=0; stopDur=3+Math.random()*6;
+        walkAngle=Math.random()*Math.PI*2; }
+    } else {
+      stopT+=dt;
+      // Graze dip
+      head.position.y=0.54+Math.sin(t*0.9)*0.08-0.05;
+      if(stopT>stopDur){ stopped=false; walkT=0; walkDur=2+Math.random()*5; }
+    }
+  }});
+}
+
+// ── Spawn wildlife distributed across the hole ───────────────────────────────
+function spawnWildlife(def) {
+  wildlifeAgents.length = 0;
+
+  // Seeded random from hole index for deterministic placement
+  let seed = def.idx * 9973 + 1234;
+  function sr(){ seed=(seed*1664525+1013904223)&0xffffffff; return Math.abs(seed)/0x7fffffff; }
+
+  const W=def.planeW*0.42, D=def.planeD*0.42;
+  const bpX=def.basketPos.x, bpZ=def.basketPos.z;
+
+  // Birds: 4-7 per hole, orbit high over mid-fairway
+  const birdCount = 4 + Math.floor(sr()*4);
+  const midPt = def.fairwayPts[Math.floor(def.fairwayPts.length/2)];
+  spawnBirdFlock(midPt[0], 14+sr()*8, midPt[1], birdCount);
+
+  // Squirrels: 2-4, near tree edges
+  const sqCount = 2 + Math.floor(sr()*3);
+  for(let i=0;i<sqCount;i++){
+    let x,z,tries=0;
+    do{ x=(sr()-0.5)*W*1.4; z=-(sr()*D); tries++; }
+    while(tries<12 && (distToPath(x,z,def.fairwayPts)<def.fairwayW+2 ||
+          Math.hypot(x,z)<5 || Math.hypot(x-bpX,z-bpZ)<6));
+    spawnSquirrel(x,z);
+  }
+
+  // Rabbits: 2-4, in rough / fairway edges
+  const rbCount = 2 + Math.floor(sr()*3);
+  for(let i=0;i<rbCount;i++){
+    let x,z,tries=0;
+    do{ x=(sr()-0.5)*W; z=-(sr()*D); tries++; }
+    while(tries<12 && (Math.hypot(x,z)<5 || Math.hypot(x-bpX,z-bpZ)<6));
+    spawnRabbit(x,z);
+  }
+
+  // Deer: 0-2 per hole (rare, appear on ~60% of holes)
+  const deerCount = sr()<0.6 ? 1+Math.floor(sr()*2) : 0;
+  for(let i=0;i<deerCount;i++){
+    let x,z,tries=0;
+    do{ x=(sr()-0.5)*W*1.2; z=-(sr()*D); tries++; }
+    while(tries<15 && (distToPath(x,z,def.fairwayPts)<def.fairwayW+4 ||
+          Math.hypot(x,z)<8 || Math.hypot(x-bpX,z-bpZ)<8));
+    spawnDeer(x,z);
+  }
+}
+
+// ── Tick ─────────────────────────────────────────────────────────────────────
+function tickWildlife(t, dt) {
+  for(const a of wildlifeAgents) a.tick(t, dt);
+}
+
+
+// =============================================================================
+//  HOLE OB POLYGON  +  ROPE BOUNDARY MARKERS
+// =============================================================================
+
+let currentHolePolygon = []; // [[x,z], ...] closed polygon
+
+// Build a corridor polygon around the hole's fairway centerline.
+// Uses averaged normals at waypoints to handle doglegs cleanly.
+function buildHoleOBPolygon(def) {
+  const center = [[0, 6]];
+  for (const fp of def.fairwayPts) center.push([fp[0], fp[1]]);
+  center.push([def.basketPos.x, def.basketPos.z - 8]);
+
+  const W = Math.max(16, def.fairwayW * 3.2) + 9.144; // half-width + 30ft extra breathing room
+
+  const left = [], right = [];
+  for (let i = 0; i < center.length; i++) {
+    const prev = center[Math.max(0, i-1)];
+    const next = center[Math.min(center.length-1, i+1)];
+    const dx = next[0] - prev[0], dz = next[1] - prev[1];
+    const len = Math.hypot(dx, dz) || 1;
+    const lx = -dz/len, lz = dx/len; // left normal
+    left.push([center[i][0] + lx*W, center[i][1] + lz*W]);
+    right.push([center[i][0] - lx*W, center[i][1] - lz*W]);
+  }
+  return [...left, ...[...right].reverse()];
+}
+
+// Ray-casting point-in-polygon test
+function inHolePolygon(wx, wz) {
+  const poly = currentHolePolygon;
+  if (!poly.length) return true; // fallback: always in
+  let inside = false;
+  for (let i = 0, j = poly.length-1; i < poly.length; j = i++) {
+    const xi = poly[i][0], zi = poly[i][1];
+    const xj = poly[j][0], zj = poly[j][1];
+    if (((zi > wz) !== (zj > wz)) && (wx < (xj-xi)*(wz-zi)/(zj-zi)+xi))
+      inside = !inside;
+  }
+  return inside;
+}
+
+// Build 3D rope-and-stake OB boundary
+function buildRopeBoundary(def) {
+  const poly = currentHolePolygon;
+  const STAKE_SPACING = 10; // meters between stakes
+
+  const woodMat  = new THREE.MeshLambertMaterial({ color: 0x7a4a18 });
+  const orangeMat = new THREE.MeshLambertMaterial({ color: 0xf05010 });
+
+  const stakePositions = []; // world XZ of every stake (for rope)
+
+  // Walk polygon edges, place stakes at STAKE_SPACING intervals
+  for (let i = 0; i < poly.length; i++) {
+    const j = (i + 1) % poly.length;
+    const x1 = poly[i][0], z1 = poly[i][1];
+    const x2 = poly[j][0], z2 = poly[j][1];
+    const segLen = Math.hypot(x2-x1, z2-z1);
+    const steps = Math.max(1, Math.round(segLen / STAKE_SPACING));
+    for (let s = 0; s < steps; s++) {
+      const t = s / steps;
+      stakePositions.push([x1+(x2-x1)*t, z1+(z2-z1)*t]);
+    }
+  }
+
+  const STAKE_H = 1.3;
+  const ROPE_H  = 0.85; // height rope connects at
+  const ropeVerts = [];
+
+  for (const [sx, sz] of stakePositions) {
+    const ty = terrainHeight(sx, sz);
+    // Wooden lower section
+    const wood = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.060, 0.075, STAKE_H * 0.55, 5),
+      woodMat
+    );
+    wood.position.set(sx, ty + STAKE_H*0.55*0.5, sz);
+    addDyn(wood);
+    // Orange upper cap
+    const cap = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.068, 0.062, STAKE_H * 0.46, 5),
+      orangeMat
+    );
+    cap.position.set(sx, ty + STAKE_H*0.55 + STAKE_H*0.46*0.5, sz);
+    addDyn(cap);
+    // Collect rope vertex
+    ropeVerts.push(sx, ty + ROPE_H, sz);
+  }
+  // Close the loop
+  if (ropeVerts.length >= 6) {
+    ropeVerts.push(ropeVerts[0], ropeVerts[1], ropeVerts[2]);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(ropeVerts), 3));
+    const rope = new THREE.Line(geo, new THREE.LineBasicMaterial({
+      color: 0xff6010, linewidth: 2
+    }));
+    addDyn(rope);
+  }
+}
+
+// =============================================================================
+//  COURSE MAP (M key)
+// =============================================================================
+let courseMapOpen = false;
+
+function toggleCourseMap() {
+  courseMapOpen = !courseMapOpen;
+  const el = document.getElementById('course-map');
+  el.style.display = courseMapOpen ? 'flex' : 'none';
+  if (courseMapOpen) drawCourseMap();
+}
+
+function drawCourseMap() {
+  const canvas = document.getElementById('cm-canvas');
+  const ctx = canvas.getContext('2d');
+  const CW = canvas.width, CH = canvas.height;
+  ctx.clearRect(0, 0, CW, CH);
+
+  // ── Course layout: [worldTeeX, worldTeeZ, bearingDeg]
+  // bearing: 0=north(-Z in world), 90=east(+X), 180=south(+Z), 270=west
+  // Pre-computed so that each basket is ~15m from next tee
+  const LAYOUT = [
+    [ 75,  40, 175],   // H1 → SSE
+    [ 90, 130, 150],   // H2 → SSE-SE
+    [115, 265,  95],   // H3 → mostly east
+    [390, 295,   0],   // H4 → north
+    [345, 180, 265],   // H5 → WNW
+    [280, 175, 200],   // H6 → SSW
+    [210, 400,  80],   // H7 → ENE
+    [350, 440,  90],   // H8 → east
+    [610, 395, 355],   // H9 → NNW back
+  ];
+
+  // Transform local hole coord → world coord
+  function toWorld(lx, lz, teeX, teeZ, angleDeg) {
+    const a = angleDeg * Math.PI / 180;
+    return [
+      teeX + lx * Math.cos(a) - lz * Math.sin(a),
+      teeZ + lx * Math.sin(a) + lz * Math.cos(a)
+    ];
+  }
+
+  // Gather all world points to compute auto-fit bounds
+  let minWX=Infinity,maxWX=-Infinity,minWZ=Infinity,maxWZ=-Infinity;
+  HOLE_DEFS.forEach((def,hi) => {
+    const [tx,tz,ang] = LAYOUT[hi];
+    const pts = [[0,0],...def.fairwayPts,[def.basketPos.x,def.basketPos.z]];
+    for(const [lx,lz] of pts){
+      const [wx,wz]=toWorld(lx,lz,tx,tz,ang);
+      minWX=Math.min(minWX,wx); maxWX=Math.max(maxWX,wx);
+      minWZ=Math.min(minWZ,wz); maxWZ=Math.max(maxWZ,wz);
+    }
+  });
+  const PAD=30;
+  minWX-=PAD; maxWX+=PAD; minWZ-=PAD; maxWZ+=PAD;
+  const scX=(CW-0)/(maxWX-minWX), scZ=(CH-0)/(maxWZ-minWZ);
+  const sc=Math.min(scX,scZ);
+  const offX=(CW-(maxWX-minWX)*sc)/2, offZ=(CH-(maxWZ-minWZ)*sc)/2;
+
+  function toPx(wx,wz) {
+    return [offX+(wx-minWX)*sc, offZ+(wz-minWZ)*sc];
+  }
+  function holePt(lx,lz,hi) {
+    const [tx,tz,ang]=LAYOUT[hi];
+    const [wx,wz]=toWorld(lx,lz,tx,tz,ang);
+    return toPx(wx,wz);
+  }
+
+  // ── Background rough ─────────────────────────────────────────────────────────
+  ctx.fillStyle='#2a6018'; ctx.fillRect(0,0,CW,CH);
+  // Mowing stripe overlay
+  ctx.save(); ctx.globalAlpha=0.055;
+  for(let x=0;x<CW;x+=16){ ctx.fillStyle='#bbffbb'; ctx.fillRect(x,0,8,CH); }
+  ctx.restore();
+
+  // ── Draw walking-path cartpaths between green and next tee ───────────────────
+  ctx.save();
+  ctx.setLineDash([4,5]);
+  ctx.strokeStyle='rgba(220,200,140,.35)';
+  ctx.lineWidth=1.5;
+  HOLE_DEFS.forEach((def,hi) => {
+    if(hi===HOLE_DEFS.length-1) return;
+    const bPx = holePt(def.basketPos.x, def.basketPos.z, hi);
+    const [ntx,ntz,nang] = LAYOUT[hi+1];
+    const [npx,npz] = toPx(ntx,ntz);
+    ctx.beginPath(); ctx.moveTo(bPx[0],bPx[1]); ctx.lineTo(npx,npz); ctx.stroke();
+  });
+  ctx.restore();
+
+  // ── Draw each hole ───────────────────────────────────────────────────────────
+  HOLE_DEFS.forEach((def,hi) => {
+    const [tx,tz,ang]=LAYOUT[hi];
+    const isActive=(hi===currentHoleIdx);
+
+    // Fairway corridor: draw as thick stroke along path
+    const fwAllPts = [[0,0],...def.fairwayPts,[def.basketPos.x,def.basketPos.z]];
+    const fwW = Math.max(5, def.fairwayW * sc * 2.4);
+
+    // Rough around fairway (slightly wider, darker)
+    ctx.save();
+    ctx.strokeStyle = isActive ? 'rgba(56,138,30,.85)' : 'rgba(42,110,18,.75)';
+    ctx.lineWidth = fwW + 8;
+    ctx.lineCap='round'; ctx.lineJoin='round';
+    ctx.beginPath();
+    let [px,pz]=holePt(fwAllPts[0][0],fwAllPts[0][1],hi);
+    ctx.moveTo(px,pz);
+    for(let i=1;i<fwAllPts.length;i++){
+      [px,pz]=holePt(fwAllPts[i][0],fwAllPts[i][1],hi);
+      ctx.lineTo(px,pz);
+    }
+    ctx.stroke();
+    // Fairway surface
+    ctx.strokeStyle = isActive ? '#72d838' : '#5ab828';
+    ctx.lineWidth = fwW;
+    ctx.beginPath();
+    [px,pz]=holePt(fwAllPts[0][0],fwAllPts[0][1],hi);
+    ctx.moveTo(px,pz);
+    for(let i=1;i<fwAllPts.length;i++){
+      [px,pz]=holePt(fwAllPts[i][0],fwAllPts[i][1],hi);
+      ctx.lineTo(px,pz);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // Green circle
+    const [gx,gz]=holePt(def.basketPos.x,def.basketPos.z,hi);
+    ctx.beginPath();
+    ctx.arc(gx,gz,Math.max(6,def.basketR*sc*9),0,Math.PI*2);
+    ctx.fillStyle=isActive?'#96f040':'#68c830';
+    ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.30)'; ctx.lineWidth=1;
+    ctx.stroke();
+
+    // Bunkers
+    if(def.bunkers){ ctx.save(); ctx.fillStyle='rgba(218,200,130,.82)';
+      for(const b of def.bunkers){
+        const [bx,bz]=holePt(b.cx,b.cz,hi);
+        const rr=toWorld(b.rx,0,0,0,ang), scale=Math.hypot(rr[0],rr[1])*sc;
+        ctx.beginPath(); ctx.ellipse(bx,bz,b.rx*sc,b.rz*sc,ang*Math.PI/180,0,Math.PI*2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // Water
+    if(def.water){ ctx.save();
+      ctx.fillStyle='rgba(44,128,230,.80)';
+      ctx.strokeStyle='rgba(100,180,255,.50)'; ctx.lineWidth=1;
+      for(const w of def.water){
+        const [wx2,wz2]=holePt(w.cx,w.cz,hi);
+        ctx.beginPath(); ctx.ellipse(wx2,wz2,w.rx*sc,w.rz*sc,ang*Math.PI/180,0,Math.PI*2);
+        ctx.fill(); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // Tee marker (yellow square)
+    const [teePx,teePz]=holePt(0,0,hi);
+    ctx.save();
+    ctx.fillStyle='#f0e040';
+    ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=1;
+    ctx.fillRect(teePx-4,teePz-4,8,8);
+    ctx.strokeRect(teePx-4,teePz-4,8,8);
+    ctx.restore();
+
+    // Flag pin
+    ctx.save();
+    ctx.fillStyle='#ff2010';
+    ctx.beginPath(); ctx.arc(gx,gz,3.5,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#fff'; ctx.lineWidth=.8; ctx.stroke();
+    ctx.restore();
+
+    // Hole number badge
+    ctx.save();
+    const [hnx,hnz]=holePt(0,-8,hi); // slightly above tee
+    const badge=isActive?16:12;
+    ctx.font=`bold ${badge}px 'Courier New',monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    // Shadow
+    ctx.fillStyle='rgba(0,0,0,.65)'; ctx.fillText(`${hi+1}`,hnx+1,hnz+1);
+    ctx.fillStyle=isActive?'#ffffff':'rgba(210,248,180,.88)'; ctx.fillText(`${hi+1}`,hnx,hnz);
+    ctx.restore();
+
+    // Par / dist below hole number
+    ctx.save();
+    const [pdx,pdz]=holePt(0,5,hi);
+    ctx.font=`bold 9px 'Courier New',monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillStyle=isActive?'rgba(220,255,180,.80)':'rgba(160,220,130,.45)';
+    ctx.fillText(`P${def.par} · ${def.distFt}'`,pdx,pdz);
+    ctx.restore();
+
+    // Active hole: highlight glow ring around fairway start
+    if(isActive){
+      ctx.save();
+      ctx.strokeStyle='rgba(255,240,60,.90)';
+      ctx.lineWidth=2.5; ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(teePx,teePz,11,0,Math.PI*2); ctx.stroke();
+      ctx.restore();
+    }
+
+    // Score badge on green
+    if(holeScores[hi]!==null){
+      const rel=holeScores[hi]-def.par;
+      ctx.save();
+      ctx.font='bold 10px Courier New';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillStyle=rel<0?'#40e8d8':rel>0?'#ff8058':'#aaeeff';
+      ctx.fillText(holeScores[hi],gx,gz);
+      ctx.restore();
+    }
+  });
+
+  // ── OB Rope lines — orange dashed polygon per hole ───────────────────────────
+  ctx.save();
+  ctx.setLineDash([5,4]);
+  ctx.lineWidth=1.4;
+  HOLE_DEFS.forEach((def,hi) => {
+    const poly = buildHoleOBPolygon(def);
+    const isActive=(hi===currentHoleIdx);
+    const [tx,tz,ang]=LAYOUT[hi];
+    ctx.strokeStyle=isActive?'rgba(255,140,20,.70)':'rgba(200,100,10,.32)';
+    ctx.beginPath();
+    for(let i=0;i<poly.length;i++){
+      const [px2,pz2]=toWorld(poly[i][0],poly[i][1],tx,tz,ang);
+      const [cpx,cpz]=toPx(px2,pz2);
+      if(i===0) ctx.moveTo(cpx,cpz); else ctx.lineTo(cpx,cpz);
+    }
+    ctx.closePath(); ctx.stroke();
+  });
+  ctx.restore();
+
+  // ── Legend ───────────────────────────────────────────────────────────────────
+  ctx.save();
+  ctx.fillStyle='rgba(0,0,0,.55)';
+  roundRect(ctx, 8, CH-24, 380, 18, 4); ctx.fill();
+  ctx.font='bold 9px Courier New'; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillStyle='rgba(200,240,170,.60)';
+  ctx.fillText('■ TEE  ● PIN  ─── FAIRWAY  ━━ ROUGH  ┄ OB ROPE  ┄ CART PATH', 14, CH-15);
+  ctx.restore();
+
+  // Border
+  ctx.strokeStyle='rgba(60,160,40,.35)'; ctx.lineWidth=2; ctx.setLineDash([]);
+  ctx.strokeRect(1,1,CW-2,CH-2);
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y); ctx.lineTo(x+w-r, y);
+  ctx.quadraticCurveTo(x+w,y, x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);
+  ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);
+  ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);
+  ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+// =============================================================================
+//  MAIN LOOP
+// =============================================================================
+let lastT = null;
+function frame(ms) {
+  requestAnimationFrame(frame);
+  if (lastT === null) { lastT = ms; return; }
+  const dt = Math.min((ms-lastT)/1000, 0.05);
+  lastT = ms;
+  const t  = ms/1000;
+
+  tickFlyby(dt);
+  tickPower(dt);
+  tickFlight(dt);
+  tickIdle(t);
+  tickArrow();
+  tickCamera(dt);
+  tickBasket(t);
+  tickHUD();
+  tickTapInProximity();
+  tickAIPrep(dt);
+  tickAIFlight(dt);
+  tickTurnBanner(dt);
+  tickWildlife(t, dt);
+  if (skyDomeMesh) skyDomeMesh.position.copy(camera.position);
+  // Billboard clouds toward camera
+  for (const c of cloudMeshes) { c.quaternion.copy(camera.quaternion); }
+  renderer.render(scene, camera);
+}
+
+// =============================================================================
+//  RESIZE
+// =============================================================================
+function onResize() {
+  const w=window.innerWidth, h=window.innerHeight;
+  renderer.setSize(w, h); camera.aspect=w/h; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', onResize);
+onResize();
+
+
+
+// =============================================================================
+//  AI LIVE SHOT SYSTEM
+// =============================================================================
+
+function resetAI() {
+  aiStrokes = 0; aiHoledOut = false; playerHoledOut = false;
+  aiPrepTimer = 0; aiTreeHitCD = 0; turnBannerTimer = 0;
+  const ty = terrainHeight(0,0);
+  aiPos.set(0, ty+0.35, 0); aiThrowOrigin.set(0, ty+0.35, 0);
+  aiVel.set(0,0,0);
+  aiPlane.visible = false; aiMarker.visible = false;
+  aiTrailCount = 0; aiTrailGeom.setDrawRange(0,0);
+  // Reset learning memory
+  Object.assign(aiMemory, {
+    obCount:0,treeCount:0,waterCount:0,bunkerCount:0,
+    lastLandX:null,lastLandZ:null,lastYaw:null,lastPitch:null,lastPwr:null,
+    treeAvoid:[],obBias:0,pwrScale:1.0,pitchBoost:0
+  });
+}
+
+// ── Compute AI throw params based on dist to basket ─────────────────────────
+function aiComputeThrow() {
+  const bp     = currentDef.basketPos;
+  const dist   = Math.hypot(aiThrowOrigin.x-bp.x, aiThrowOrigin.z-bp.z);
+  const distFt = dist * 3.28084;
+
+  let planeIdx = 0;
+  if      (distFt < 80)  planeIdx = 2;
+  else if (distFt < 200) planeIdx = 1;
+  const plane = PLANE_TYPES[planeIdx];
+
+  const perfectYaw = yawToward(aiThrowOrigin, bp);
+  const sideOff    = (Math.random() > 0.5 ? 1 : -1) * (0.04 + Math.random()*0.06);
+  const maxErr     = Math.min(0.22, 0.03 + distFt * 0.0007);
+
+  // ── Tree avoidance: scan nearby tree colliders along current throw path ──
+  let treeBias = 0;
+  for (const tc of treeColliders) {
+    const toTree = yawToward(aiThrowOrigin, {x:tc.x, z:tc.z});
+    const angleDiff = Math.abs(((toTree - perfectYaw + Math.PI*3) % (Math.PI*2)) - Math.PI);
+    const treeDist  = Math.hypot(aiThrowOrigin.x-tc.x, aiThrowOrigin.z-tc.z);
+    if (angleDiff < 0.35 && treeDist < dist * 1.1 && treeDist > 1.5) {
+      // Tree is in the throw corridor – dodge away from it
+      const side = (aiThrowOrigin.x + Math.sin(perfectYaw+Math.PI/2) - tc.x) > 0 ? 1 : -1;
+      treeBias += side * (0.18 + Math.min(0.3, tc.r * 0.25)) * (1 / Math.max(1, angleDiff*4));
+    }
+  }
+  // Also apply stored treeAvoid memory (heavier penalty for known obstacles)
+  for (const ta of aiMemory.treeAvoid) {
+    const toTA = yawToward(aiThrowOrigin, {x:ta.x, z:ta.z});
+    const angTA = Math.abs(((toTA - perfectYaw + Math.PI*3) % (Math.PI*2)) - Math.PI);
+    const dTA   = Math.hypot(aiThrowOrigin.x-ta.x, aiThrowOrigin.z-ta.z);
+    if (angTA < 0.4 && dTA < dist * 1.1 && dTA > 1.5) {
+      const side2 = (aiThrowOrigin.x + Math.sin(perfectYaw+Math.PI/2) - ta.x) > 0 ? 1 : -1;
+      treeBias += side2 * 0.35; // stronger nudge for remembered trees
+    }
+  }
+  treeBias = Math.max(-0.55, Math.min(0.55, treeBias)); // clamp
+
+  // ── OB bias: if last throw went OOB, nudge yaw back toward safe side ──
+  const obBias = aiMemory.obBias;
+
+  // ── Water / bunker avoidance: if hazard is in front and near, add clearance ──
+  let hazardPitchBoost = aiMemory.pitchBoost;
+  let hazardPwrAdj = 0;
+
+  // Sample 8 points along throw path to detect if landing will hit water/bunker
+  const approxMaxFt2 = plane.speedMax * 11.0;
+  const basePwr = Math.min(0.96, distFt / approxMaxFt2 + 0.12) * aiMemory.pwrScale;
+  for (let step = 1; step <= 8; step++) {
+    const frac = step / 8;
+    const sx = aiThrowOrigin.x + (bp.x - aiThrowOrigin.x) * frac;
+    const sz = aiThrowOrigin.z + (bp.z - aiThrowOrigin.z) * frac;
+    const hitW = currentDef.water   && currentDef.water.some(w => inEllipse(sx,sz,w));
+    const hitB = currentDef.bunkers && currentDef.bunkers.some(b => inEllipse(sx,sz,b));
+    if (hitW || hitB) {
+      // Hazard detected along path: add pitch (fly over) or power (carry past)
+      const penalty = hitW ? 0.12 : 0.07;
+      hazardPitchBoost += penalty * (1 - frac); // more boost for closer hazards
+      hazardPwrAdj     += penalty * 0.06;
+    }
+  }
+  // Carry bonus from learned memory (water/bunker was hit before → always boost)
+  hazardPitchBoost += aiMemory.waterCount  * 0.07;
+  hazardPitchBoost += aiMemory.bunkerCount * 0.04;
+  hazardPitchBoost  = Math.min(hazardPitchBoost, 0.35); // don't over-loft
+
+  // ── Final yaw ──────────────────────────────────────────────────────────
+  const yaw = perfectYaw + sideOff + obBias + treeBias + (Math.random()-0.5)*maxErr;
+
+  // ── Final pitch ────────────────────────────────────────────────────────
+  const basePitch = distFt < 60  ? 0.78 + Math.random()*0.12
+                  : distFt < 120 ? 0.62 + Math.random()*0.10
+                  : distFt < 220 ? 0.50 + Math.random()*0.09
+                  :                0.40 + Math.random()*0.09;
+  const pitch = Math.min(1.10, basePitch + hazardPitchBoost);
+
+  // ── Final power ────────────────────────────────────────────────────────
+  let pwr = Math.min(0.98, basePwr + hazardPwrAdj + (Math.random()-0.5)*0.18);
+  pwr = Math.max(0.22, pwr);
+
+  // Store last throw params for next learning step
+  aiMemory.lastYaw = yaw; aiMemory.lastPitch = pitch; aiMemory.lastPwr = pwr;
+
+  return { yaw, pitch, pwr, planeIdx };
+}
+
+// ── Turn management ──────────────────────────────────────────────────────────
+function setTurnBanner(msg, duration) {
+  const el = document.getElementById('turn-banner');
+  el.textContent = msg; el.style.display = 'block'; el.style.opacity = '1';
+  turnBannerTimer = duration || 0;
+}
+function hideTurnBanner() {
+  const el = document.getElementById('turn-banner');
+  el.style.opacity = '0';
+  setTimeout(()=>{ if(el.style.opacity==='0') el.style.display='none'; }, 420);
+  turnBannerTimer = 0;
+}
+function tickTurnBanner(dt) {
+  if (turnBannerTimer <= 0) return;
+  turnBannerTimer -= dt;
+  if (turnBannerTimer <= 0) hideTurnBanner();
+}
+
+// Decide who throws next after a disc lands
+function decideTurn() {
+  if (gameMode !== 'vsai') return; // solo: caller handles state
+  if (playerHoledOut && aiHoledOut) return; // both done – shouldn't reach here
+  const bp = currentDef.basketPos;
+  const pDist = playerHoledOut ? -1 : Math.hypot(throwOrigin.x-bp.x, throwOrigin.z-bp.z);
+  const aDist = aiHoledOut     ? -1 : Math.hypot(aiThrowOrigin.x-bp.x, aiThrowOrigin.z-bp.z);
+  if (!aiHoledOut && aDist >= pDist) {
+    scheduleAIThrow(1.3);
+  } else if (!playerHoledOut) {
+    setTurnBanner('✈ YOUR TURN', 1.6);
+    state = S.LANDED;
+    showEl('holecard'); showEl('scoretable'); showEl('wind-hud'); showEl('plane-sel','flex');
+    setHint('Click or Enter to aim  ·  R to reset');
+  }
+}
+
+function scheduleAIThrow(delay) {
+  state = S_AI_PREP;
+  aiPrepTimer = delay;
+  setTurnBanner('🤖 CPU IS THROWING...');
+  hideEl('plane-sel'); hideEl('shot-sel'); hideEl('power-wrap');
+  hideEl('xhair'); hideEl('xdot'); hideEl('aim-hud');
+}
+
+function doAIThrow() {
+  const t = aiComputeThrow();
+  selectPlane(t.planeIdx);
+  aiStrokes++;
+  aiPos.copy(aiThrowOrigin); aiPos.y += 0.28;
+  const spd = activePlane.speedMin + t.pwr*(activePlane.speedMax-activePlane.speedMin);
+  aiVel.copy(aimDir(t.yaw, t.pitch)).multiplyScalar(spd);
+  aiPlane.visible = true; aiMarker.visible = false;
+  aiTrailCount = 0; aiTrailGeom.setDrawRange(0,0);
+  state = S_AI_FLYING;
+  hideTurnBanner();
+  setSL('CPU in flight'); setHint('');
+  showEl('holecard'); showEl('wind-hud');
+}
+
+// ── AI holed out ─────────────────────────────────────────────────────────────
+function onAIHoledOut() {
+  aiPlane.visible = false; aiMarker.visible = false;
+  aiVel.set(0,0,0); aiHoledOut = true;
+  aiScores[currentHoleIdx] = aiStrokes;
+  flash(`🤖 CPU HOLED OUT!  ${aiStrokes} stroke${aiStrokes!==1?'s':''}`);
+  if (playerHoledOut) {
+    showHoleCompleteOverlay();
+  } else {
+    state = S.LANDED;
+    setTurnBanner('✈ YOUR TURN', 2.0);
+    showEl('holecard'); showEl('scoretable'); showEl('wind-hud'); showEl('plane-sel','flex');
+    setHint('Click or Enter to aim  ·  R to reset');
+  }
+}
+
+// ── AI flight tick ────────────────────────────────────────────────────────────
+function tickAIPrep(dt) {
+  if (state !== S_AI_PREP) return;
+  aiPrepTimer -= dt;
+  if (aiPrepTimer <= 0) doAIThrow();
+}
+
+function tickAIFlight(dt) {
+  if (state !== S_AI_FLYING) return;
+
+  // Physics (mirrors tickFlight)
+  aiVel.addScaledVector(WIND_VEC, dt * 0.5);
+  aiVel.y -= GRAVITY * dt;
+  aiVel.y += activePlane.lift * Math.hypot(aiVel.x, aiVel.z) * dt;
+  aiVel.multiplyScalar(Math.exp(-activePlane.drag * dt));
+  aiPos.addScaledVector(aiVel, dt);
+
+  if (aiVel.length() > 0.3)
+    aiPlane.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,-1), aiVel.clone().normalize());
+  aiPlane.position.copy(aiPos);
+
+  // Trail
+  if (aiTrailCount < AI_TRAIL_MAX) {
+    aiTrailBuf[aiTrailCount*3]   = aiPos.x;
+    aiTrailBuf[aiTrailCount*3+1] = aiPos.y;
+    aiTrailBuf[aiTrailCount*3+2] = aiPos.z;
+    aiTrailCount++; aiTrailGeom.attributes.position.needsUpdate = true;
+    aiTrailGeom.setDrawRange(0, aiTrailCount);
+  }
+  if (aiTreeHitCD > 0) aiTreeHitCD -= dt;
+
+  // Tree collision
+  for (const tc of treeColliders) {
+    const dx = aiPos.x-tc.x, dz = aiPos.z-tc.z;
+    const hd = Math.hypot(dx, dz);
+    if (hd < tc.r && aiPos.y < tc.h) {
+      const nx = dx/(hd+1e-5), nz = dz/(hd+1e-5);
+      const dot = aiVel.x*nx + aiVel.z*nz;
+      if (dot < 0) {
+        aiVel.x -= 2.0*dot*nx; aiVel.z -= 2.0*dot*nz;
+        aiVel.y = Math.max(aiVel.y, 1.8);
+        aiVel.multiplyScalar(0.55);
+        aiPos.x = tc.x + nx*(tc.r+0.12); aiPos.z = tc.z + nz*(tc.r+0.12);
+        if (aiTreeHitCD <= 0) {
+          flash('🤖 CPU '+(tc.isPole?'POLE':'TREE')+' HIT!');
+          aiTreeHitCD = 1.2;
+          aiMemory.treeCount++;
+          // Learn: record this tree so aiComputeThrow will dodge it next time
+          const alreadyKnown = aiMemory.treeAvoid.some(t=>Math.hypot(t.x-tc.x,t.z-tc.z)<0.5);
+          if (!alreadyKnown) aiMemory.treeAvoid.push({x:tc.x, z:tc.z, r:tc.r+0.5});
+          // Add extra pitch boost to fly over the tree next time
+          aiMemory.pitchBoost += 0.08 * Math.min(3, aiMemory.treeCount);
+        }
+      }
+      break;
+    }
+  }
+
+  // Basket collision
+  if (aiPos.distanceTo(currentDef.basketPos) < currentDef.basketR+0.22) {
+    onAIHoledOut(); return;
+  }
+
+  // Terrain landing
+  const gY = terrainHeight(aiPos.x, aiPos.z);
+  if (aiPos.y <= gY + 0.07) {
+    aiPos.y = gY + 0.07; aiVel.set(0,0,0);
+    aiPlane.position.copy(aiPos); aiPlane.visible = false;
+
+    // Water hazard: +1, re-throw from prev lie
+    if (inWater(aiPos.x, aiPos.z)) {
+      aiStrokes++;
+      flash('💧 CPU WATER HAZARD! +1 stroke');
+      aiMemory.waterCount++;
+      aiMemory.lastLandX = aiPos.x; aiMemory.lastLandZ = aiPos.z;
+      // Learn: next throw add more loft to carry over water
+      aiMemory.pitchBoost += 0.09 * Math.min(3, aiMemory.waterCount);
+      aiMemory.pwrScale    = Math.min(1.08, aiMemory.pwrScale * 1.06); // bit more power to carry
+      // aiThrowOrigin unchanged – re-throw from same spot
+    } else {
+      if (inBunker(aiPos.x, aiPos.z)) {
+        aiStrokes++; flash('⛳ CPU SAND BUNKER! +1 stroke');
+        aiMemory.bunkerCount++;
+        aiMemory.lastLandX = aiPos.x; aiMemory.lastLandZ = aiPos.z;
+        // Learn: add more carry to skip over the bunker
+        aiMemory.pitchBoost += 0.05 * Math.min(3, aiMemory.bunkerCount);
+        aiMemory.pwrScale    = Math.min(1.05, aiMemory.pwrScale * 1.04);
+      }
+      aiThrowOrigin.copy(aiPos); aiThrowOrigin.y = gY + 0.35;
+      aiMemory.lastLandX = aiPos.x; aiMemory.lastLandZ = aiPos.z;
+      // Successful landing → slowly decay pitch/OB bias back toward baseline
+      aiMemory.pitchBoost *= 0.50;
+      aiMemory.obBias     *= 0.40;
+      aiMemory.pwrScale    = 0.85 + aiMemory.pwrScale * 0.15; // gentle reset toward 1.0
+    }
+    aiMarker.position.set(aiThrowOrigin.x, aiThrowOrigin.y+0.12, aiThrowOrigin.z);
+    aiMarker.visible = true;
+
+    // Stroke limit / auto tap-in
+    const aiHorizDist = Math.hypot(aiThrowOrigin.x-currentDef.basketPos.x, aiThrowOrigin.z-currentDef.basketPos.z);
+    if (aiHorizDist <= 20/3.28084 || aiStrokes >= currentDef.par*3) {
+      if (aiStrokes < currentDef.par*3) aiStrokes++; // tap-in stroke
+      onAIHoledOut(); return;
+    }
+    decideTurn(); return;
+  }
+
+  // OOB (polygon check)
+  if (!inHolePolygon(aiPos.x, aiPos.z) || aiPos.y > 110) {
+    aiStrokes++;
+    flash('🤖 CPU OUT OF BOUNDS! +1 stroke');
+    aiMemory.obCount++;
+    // Learn: figure out which side went OOB and nudge yaw the other way
+    if (aiMemory.lastYaw !== null) {
+      const perfectYawOB = yawToward(aiThrowOrigin, currentDef.basketPos);
+      const drift = aiMemory.lastYaw - perfectYawOB;
+      // Counter the drift plus a bit more, scaled by repeat OBs
+      aiMemory.obBias = -drift * 0.65 * Math.min(3, aiMemory.obCount);
+      aiMemory.obBias = Math.max(-0.45, Math.min(0.45, aiMemory.obBias));
+    }
+    // If went OOB long (high), reduce power; if short/wide, adjust less
+    if (aiPos.y > 50) aiMemory.pwrScale *= 0.88; // flew too high → reduce pwr
+    else              aiMemory.pwrScale *= 0.92;
+    aiMemory.pwrScale = Math.max(0.55, aiMemory.pwrScale);
+    aiPos.copy(aiThrowOrigin); aiVel.set(0,0,0);
+    aiPlane.position.copy(aiPos); aiPlane.visible = false;
+    aiMarker.position.set(aiThrowOrigin.x, aiThrowOrigin.y+0.12, aiThrowOrigin.z);
+    aiMarker.visible = true;
+    if (aiStrokes >= currentDef.par*3) { onAIHoledOut(); return; }
+    decideTurn();
+  }
+}
+
+// =============================================================================
+//  MENU & MODE SELECTION
+// =============================================================================
+function goToMenu() {
+  hideEl('final-sc'); hideEl('complete'); hideEl('scoretable');
+  hideEl('holecard'); hideEl('wind-hud'); hideEl('plane-sel');
+  hideEl('shot-sel'); hideEl('flash');
+  document.getElementById('main-menu').style.display = 'flex';
+}
+window.goToMenu = goToMenu;
+
+function startSinglePlayer() {
+  gameMode = 'solo';
+  aiScores.fill(null);
+  document.getElementById('main-menu').style.display = 'none';
+  startNewRound();
+}
+window.startSinglePlayer = startSinglePlayer;
+
+function startVsAI() {
+  gameMode = 'vsai';
+  aiScores.fill(null);
+  document.getElementById('main-menu').style.display = 'none';
+  startNewRound(); // resetAI() called inside startNewRound
+}
+window.startVsAI = startVsAI;
+
+// =============================================================================
+//  AI OPPONENT  –  simulated stroke-play CPU
+// =============================================================================
+// The AI "plays" each hole when the player finishes it.
+// Skill profile: hits 70% of par, sometimes unlucky (+1-2), occasionally great.
+function aiPlayHole(def) {
+  const par = def.par;
+  // Weighted outcome relative to par
+  // Probabilities: HIO, Eagle, Birdie, Par, Bogey, Double, Triple
+  const rolls = [
+    { rel:-par+1, w: par<=3 ? 2 : 0 },     // Hole in one (only on par 3)
+    { rel:-2,     w: par>=4 ? 3 : 1 },      // Eagle
+    { rel:-1,     w:18 },                   // Birdie
+    { rel: 0,     w:32 },                   // Par
+    { rel: 1,     w:24 },                   // Bogey
+    { rel: 2,     w:14 },                   // Double bogey
+    { rel: 3,     w: 6 },                   // Triple bogey
+  ];
+  let total = rolls.reduce((a,r)=>a+r.w,0);
+  let rng = Math.random()*total;
+  let rel = 1;
+  for(const r of rolls){ rng-=r.w; if(rng<=0){rel=r.rel;break;} }
+  return Math.max(1, par + rel);
+}
+
+function aiPlayRound() {
+  HOLE_DEFS.forEach((def,i) => { aiScores[i] = aiPlayHole(def); });
+}
+
+// =============================================================================
+//  FINAL SCORECARD  –  extended for VS AI mode
+// =============================================================================
+
+// =============================================================================
+//  BOOT
+// =============================================================================
+buildScorecardRows();
+// Load hole 0 silently so the scene is ready behind the menu
+loadHole(0);
+resetAI();
+throwOrigin.set(0, terrainHeight(0,0)+0.35, 0);
+aimYaw = yawToward(throwOrigin, currentDef.basketPos);
+planePos.copy(throwOrigin);
+// Start render loop but stay on menu — game begins when player clicks
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
